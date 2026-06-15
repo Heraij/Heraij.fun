@@ -3,12 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber-Tactics Chess Puzzles</title>
+    <title>Chess Puzzles</title>
     
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
 
     <style>
         body {
@@ -18,23 +15,49 @@
             text-align: center;
             margin: 0;
             padding: 20px;
+            user-select: none;
         }
         h1 { color: #00f2fe; margin-bottom: 5px; }
         #status { font-size: 1.2rem; color: #e94560; margin-bottom: 20px; min-height: 1.5em; }
         #rating { color: #888; margin-bottom: 15px; font-weight: bold; }
 
-        /* --- THE BOARD WRAPPER --- */
-        #myBoard {
-            width: 360px;
-            margin: 0 auto;
-            border: 4px solid #0f3460;
-            border-radius: 5px;
+        /* --- THE BOARD --- */
+        .board-container {
+            display: inline-block;
+            background-color: #0f3460;
+            padding: 4px;
+            border-radius: 8px;
             box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
         }
 
-        /* Tweak chessboard.js white/black square colors to fit dark theme */
-        .white-1e1d7 { background-color: #e2e4e6; color: #1a1a2e; }
-        .black-b7a1a { background-color: #889cac; color: #fff; }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 45px);
+            grid-template-rows: repeat(8, 45px);
+        }
+
+        .square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+
+        /* Dark Theme Square Matrix Styles */
+        .light { background-color: #e2e4e6; }
+        .dark { background-color: #889cac; }
+
+        /* Highlight classes for selecting pieces */
+        .square.selected {
+            background-color: #00f2fe !important;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        /* Pure Text Piece Color Overlays */
+        .piece.w { color: #ffffff; filter: drop-shadow(0px 0px 2px #000); }
+        .piece.b { color: #1a1a2e; }
 
         .btn {
             background-color: #e94560;
@@ -45,7 +68,6 @@
             border-radius: 5px;
             cursor: pointer;
             margin-top: 25px;
-            margin-right: 10px;
         }
         .btn:hover { background-color: #ff527b; }
         .btn:disabled { background-color: #555; cursor: not-allowed; }
@@ -71,53 +93,133 @@
     <div id="rating">Puzzle Rating: Loading...</div>
     <div id="status">Loading fresh puzzle grid...</div>
 
-    <div id="myBoard"></div>
+    <div class="board-container">
+        <div class="board" id="chess-board"></div>
+    </div>
 
+    <br>
     <button class="btn" id="next-btn" onclick="fetchPuzzle()" disabled>Next Puzzle</button>
     <button class="home-btn" onclick="window.location.href='index.html'">Back to Arcade</button>
 
     <script>
-        let board = null;
         let game = new Chess();
         let puzzleSolutions = [];
         let currentMoveIndex = 0;
         let playerColor = 'w';
+        let selectedSquare = null;
 
-        function onDragStart(source, piece, position, orientation) {
-            if (currentMoveIndex >= puzzleSolutions.length) return false;
-            if ((playerColor === 'w' && piece.search(/^b/) !== -1) ||
-                (playerColor === 'b' && piece.search(/^w/) !== -1)) {
-                return false;
+        // Map characters to standard Unicode Text symbols
+        const unicodePieces = {
+            'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
+            'P': '♟', 'R': '♜', 'N': '♞', 'B': '♝', 'Q': '♛', 'K': '♚'
+        };
+
+        const squareNames = [
+            'a8','b8','c8','d8','e8','f8','g8','h8',
+            'a7','b7','c7','d7','e7','f7','g7','h7',
+            'a6','b6','c6','d6','e6','f6','g6','h6',
+            'a5','b5','c5','d5','e5','f6','g5','h5', // Chess.js safety alignment array mapping
+            'a5','b5','c5','d5','e5','f5','g5','h5',
+            'a4','b4','c4','d4','e4','f4','g4','h4',
+            'a3','b3','c3','d3','e3','f3','g3','h3',
+            'a2','b2','c2','d2','e2','f2','g2','h2',
+            'a1','b1','c1','d1','e1','f1','g1','h1'
+        ];
+
+        // Renders the board view manually from chess.js matrix data
+        function drawBoard() {
+            const boardElement = document.getElementById("chess-board");
+            boardElement.innerHTML = "";
+
+            // Flip rendering perspective automatically depending on if playing black or white side
+            let isWhite = (playerColor === 'w');
+            
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    let actualRow = isWhite ? row : 7 - row;
+                    let actualCol = isWhite ? col : 7 - col;
+                    
+                    // Generate algebraic square mapping ID (e.g. "e4")
+                    let files = ['a','b','c','d','e','f','g','h'];
+                    let ranks = ['8','7','6','5','4','3','2','1'];
+                    let squareName = files[actualCol] + ranks[actualRow];
+
+                    let piece = game.get(squareName);
+
+                    let squareDiv = document.createElement("div");
+                    squareDiv.className = `square ${(actualRow + actualCol) % 2 === 0 ? 'light' : 'dark'}`;
+                    squareDiv.id = squareName;
+                    
+                    if (selectedSquare === squareName) {
+                        squareDiv.classList.add("selected");
+                    }
+
+                    if (piece) {
+                        let pieceSpan = document.createElement("span");
+                        pieceSpan.className = `piece ${piece.color}`;
+                        pieceSpan.innerText = unicodePieces[piece.type];
+                        squareDiv.appendChild(pieceSpan);
+                    }
+
+                    squareDiv.onclick = () => handleSquareClick(squareName);
+                    boardElement.appendChild(squareDiv);
+                }
             }
         }
 
-        function onDrop(source, target) {
-            let move = game.move({
-                from: source,
-                to: target,
-                promotion: 'q'
-            });
+        function handleSquareClick(squareName) {
+            if (currentMoveIndex >= puzzleSolutions.length) return;
 
-            if (move === null) return 'snapback';
+            let piece = game.get(squareName);
 
-            let moveUci = source + target;
-            
-            if (moveUci === puzzleSolutions[currentMoveIndex]) {
-                currentMoveIndex++;
-                
-                if (currentMoveIndex < puzzleSolutions.length) {
-                    document.getElementById('status').innerText = "Correct! Mainframe defending...";
-                    setTimeout(makeComputerMove, 600);
-                } else {
-                    document.getElementById('status').innerText = "🎉 Puzzle Solved! Matrix Overridden.";
-                    document.getElementById('next-btn').disabled = false;
+            // 1. Selecting a piece
+            if (selectedSquare === null) {
+                if (piece && piece.color === playerColor) {
+                    selectedSquare = squareName;
+                    drawBoard();
                 }
-            } else {
-                document.getElementById('status').innerText = "❌ Incorrect Line! Reverting grid...";
-                setTimeout(() => {
-                    game.undo();
-                    board.position(game.fen());
-                }, 800);
+            } 
+            // 2. Clicking a target square to execute a move
+            else {
+                let source = selectedSquare;
+                let target = squareName;
+                selectedSquare = null; // Clear active state selection immediately
+
+                let move = game.move({
+                    from: source,
+                    to: target,
+                    promotion: 'q'
+                });
+
+                if (move === null) {
+                    // Clicking another valid player piece switches selection instead of failing
+                    if (piece && piece.color === playerColor) {
+                        selectedSquare = squareName;
+                    }
+                    drawBoard();
+                    return;
+                }
+
+                // Verify move against sequence array target
+                let moveUci = source + target;
+                if (moveUci === puzzleSolutions[currentMoveIndex]) {
+                    currentMoveIndex++;
+                    drawBoard();
+
+                    if (currentMoveIndex < puzzleSolutions.length) {
+                        document.getElementById('status').innerText = "Correct! Mainframe defending...";
+                        setTimeout(makeComputerMove, 600);
+                    } else {
+                        document.getElementById('status').innerText = "🎉 Puzzle Solved! Matrix Overridden.";
+                        document.getElementById('next-btn').disabled = false;
+                    }
+                } else {
+                    document.getElementById('status').innerText = "❌ Incorrect Line! Reverting grid...";
+                    setTimeout(() => {
+                        game.undo();
+                        drawBoard();
+                    }, 600);
+                }
             }
         }
 
@@ -127,20 +229,16 @@
             let to = compMove.substring(2, 4);
 
             game.move({ from: from, to: to, promotion: 'q' });
-            board.position(game.fen());
-            
             currentMoveIndex++;
+            
+            drawBoard();
             document.getElementById('status').innerText = "Your turn. Find the best continuation!";
-        }
-
-        function onSnapEnd() {
-            board.position(game.fen());
         }
 
         async function fetchPuzzle() {
             document.getElementById('next-btn').disabled = true;
             document.getElementById('status').innerText = "Querying Lichess database...";
-            document.getElementById('rating').innerText = "Puzzle Rating: Loading...";
+            selectedSquare = null;
 
             try {
                 const response = await fetch('https://lichess.org/api/puzzle/next');
@@ -155,33 +253,17 @@
                 game = new Chess(fen);
                 playerColor = game.turn(); 
 
-                // --- FOOLPROOF IMAGE AND CONFIG RE-WRITE ---
-                const config = {
-                    draggable: true,
-                    position: fen,
-                    orientation: playerColor === 'w' ? 'white' : 'black',
-                    onDragStart: onDragStart,
-                    onDrop: onDrop,
-                    onSnapEnd: onSnapEnd,
-                    // Replaced with an ultra-reliable, universally accepted wiki layout
-                    pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-                };
-                
-                // Clear out any old board traces to prevent rendering ghosts
-                $('#myBoard').empty();
-                board = Chessboard('myBoard', config);
-
+                drawBoard();
                 document.getElementById('status').innerText = "Opponent just played. Counter it!";
                 setTimeout(makeComputerMove, 600);
 
             } catch (error) {
-                console.error(error);
                 document.getElementById('status').innerText = "Failed to sync matrix. Are you online?";
                 document.getElementById('next-btn').disabled = false;
             }
         }
 
-        $(document).ready(fetchPuzzle);
+        window.onload = fetchPuzzle;
     </script>
 </body>
 </html>
