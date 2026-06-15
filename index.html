@@ -169,6 +169,11 @@
     <p>Consult the digital mainframe. Ask any question to decrypt the secrets of the future!</p>
     <div class="play-btn">Consult Matrix</div>
 </div>
+                <div class="game-card" onclick="window.location.href='tictactoe.html'">
+    <h2>❌ Cyber-Grid XO</h2>
+    <p>Challenge the AI mainframe to a grid match. Match three nodes sequentially to override the system!</p>
+    <div class="play-btn">Initialize Match</div>
+</div>
 
             </div>
         </div>
@@ -179,13 +184,14 @@
 <div class="dots-container">
     <div class="dot active" onclick="currentSlide(0)"></div>
     <div class="dot" onclick="currentSlide(1)"></div>
-    <div class="dot" onclick="currentSlide(2)"></div> </div>
+    <div class="dot" onclick="currentSlide(2)"></div>
+    <div class="dot" onclick="currentSlide(3)"></div> </div>
 
     <script>
         const track = document.getElementById('track');
         const dots = document.querySelectorAll('.dot');
         let currentIndex = 0;
-        const totalSlides = 3; // Update this number if you add more games!
+        const totalSlides = 4; // Update this number if you add more games!
 
         function updateCarousel() {
             // Shift the track left based on the current index
