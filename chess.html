@@ -116,13 +116,11 @@
         let playerColor = 'w';
         let selectedSquare = null;
 
-        // Map characters to standard Unicode Text symbols
         const unicodePieces = {
             'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
             'P': '♟', 'R': '♜', 'N': '♞', 'B': '♝', 'Q': '♛', 'K': '♚'
         };
 
-        // Renders the board view manually from chess.js matrix data
         function drawBoard() {
             const boardElement = document.getElementById("chess-board");
             boardElement.innerHTML = "";
@@ -130,13 +128,11 @@
             // Flip rendering perspective automatically depending on if playing black or white side
             let isWhite = (playerColor === 'w');
             
-            // Loop through the 8x8 matrix grid
             for (let row = 0; row < 8; row++) {
                 for (let col = 0; col < 8; col++) {
                     let actualRow = isWhite ? row : 7 - row;
                     let actualCol = isWhite ? col : 7 - col;
                     
-                    // Generate correct standard board coordinates
                     let files = ['a','b','c','d','e','f','g','h'];
                     let ranks = ['8','7','6','5','4','3','2','1'];
                     let squareName = files[actualCol] + ranks[actualRow];
@@ -169,19 +165,17 @@
 
             let piece = game.get(squareName);
 
-            // 1. Selecting a piece
             if (selectedSquare === null) {
                 if (piece && piece.color === playerColor) {
                     selectedSquare = squareName;
                     drawBoard();
                 }
-            } 
-            // 2. Clicking a target square to execute a move
-            else {
+            } else {
                 let source = selectedSquare;
                 let target = squareName;
-                selectedSquare = null; // Clear active state selection immediately
+                selectedSquare = null; 
 
+                // Execute and validate move logic
                 let move = game.move({
                     from: source,
                     to: target,
@@ -189,7 +183,6 @@
                 });
 
                 if (move === null) {
-                    // Clicking another valid player piece switches selection instead of failing
                     if (piece && piece.color === playerColor) {
                         selectedSquare = squareName;
                     }
@@ -197,11 +190,10 @@
                     return;
                 }
 
-                // Verify move against solution sequence array target
                 let moveUci = source + target;
-                if (moveUci === puzzleSolutions[currentMoveIndex] || 
-                    (move.promotion && (source + target + 'q') === puzzleSolutions[currentMoveIndex])) {
-                    
+                let moveUciPromo = source + target + 'q';
+                
+                if (moveUci === puzzleSolutions[currentMoveIndex] || moveUciPromo === puzzleSolutions[currentMoveIndex]) {
                     currentMoveIndex++;
                     drawBoard();
 
@@ -223,6 +215,8 @@
         }
 
         function makeComputerMove() {
+            if (currentMoveIndex >= puzzleSolutions.length) return;
+
             let compMove = puzzleSolutions[currentMoveIndex];
             let from = compMove.substring(0, 2);
             let to = compMove.substring(2, 4);
@@ -249,18 +243,27 @@
                 
                 document.getElementById('rating').innerText = `Puzzle Rating: ${data.puzzle.rating}`;
                 
-                // Initialize the game instance with the exact FEN puzzle layout positions
-                game = new Chess(fen);
-                playerColor = game.turn(); 
-
-                // Draw the unique mid-game position state
-                drawBoard();
-                document.getElementById('status').innerText = "Opponent just played. Counter it!";
+                // CRITICAL FIX: Use clean instance reset and load sequentially
+                game = new Chess();
+                let loaded = game.load(fen);
                 
-                // Fire the initial setup move
-                setTimeout(makeComputerMove, 600);
+                if (!loaded) {
+                    // Fallback configuration check if string requires trimming
+                    game.load(fen.split(" ")[0] + " w - - 0 1");
+                }
+
+                // Determine whose turn it is to react to the initial layout state
+                let initialTurn = game.turn();
+                playerColor = initialTurn === 'w' ? 'b' : 'w'; 
+
+                drawBoard();
+                document.getElementById('status').innerText = "Opponent is making their setup move...";
+                
+                // Play the introductory blunder setup move from the puzzle history track
+                setTimeout(makeComputerMove, 800);
 
             } catch (error) {
+                console.error(error);
                 document.getElementById('status').innerText = "Failed to sync matrix. Are you online?";
                 document.getElementById('next-btn').disabled = false;
             }
