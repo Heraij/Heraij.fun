@@ -16,6 +16,32 @@
         h1 { color: #00f2fe; margin-bottom: 5px; }
         #status { font-size: 1.2rem; color: #e94560; margin-bottom: 20px; min-height: 1.5em; }
 
+        /* --- DIFFICULTY SLIDER --- */
+        .slider-container {
+            margin: 0 auto 25px auto;
+            max-width: 300px;
+            background-color: #16213e;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #0f3460;
+        }
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+        #difficulty-name {
+            color: #00f2fe;
+            text-transform: uppercase;
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: #e94560;
+            cursor: pointer;
+        }
+
         /* --- THE BOARD --- */
         .board {
             display: grid;
@@ -44,7 +70,6 @@
             box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
         }
 
-        /* Distinct styling for X and O */
         .cell.X { color: #00f2fe; text-shadow: 0 0 10px #00f2fe; }
         .cell.O { color: #e94560; text-shadow: 0 0 10px #e94560; }
         .cell.taken { cursor: not-allowed; }
@@ -81,6 +106,14 @@
     <h1>❌ Cyber-Grid XO ⭕</h1>
     <div id="status">Your turn (X)</div>
 
+    <div class="slider-container">
+        <div class="slider-label">
+            <span>Mainframe Level:</span>
+            <span id="difficulty-name">Easy</span>
+        </div>
+        <input type="range" id="diff-slider" min="1" max="3" value="1" oninput="changeDifficulty()">
+    </div>
+
     <div class="board" id="board">
         <div class="cell" onclick="makeMove(this, 0)"></div>
         <div class="cell" onclick="makeMove(this, 1)"></div>
@@ -100,6 +133,8 @@
         let boardState = ["", "", "", "", "", "", "", "", ""];
         let gameActive = true;
         const statusDisplay = document.getElementById("status");
+        const slider = document.getElementById("diff-slider");
+        const diffName = document.getElementById("difficulty-name");
 
         const winningConditions = [
             [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
@@ -107,10 +142,16 @@
             [0, 4, 8], [2, 4, 6]             // Diagonals
         ];
 
+        const labels = { 1: "Easy", 2: "Medium", 3: "Hard" };
+
+        function changeDifficulty() {
+            diffName.innerText = labels[slider.value];
+            resetBoard(); // Reset game when difficulty adjusts to prevent cheating
+        }
+
         function makeMove(cell, index) {
             if (boardState[index] !== "" || !gameActive) return;
 
-            // Player's move (X)
             executeMove(cell, index, "X");
 
             if (checkWin("X")) {
@@ -125,11 +166,10 @@
                 return;
             }
 
-            // AI's turn (O)
-            gameActive = false; // Temporarily lock board during AI "thinking"
+            gameActive = false; 
             statusDisplay.innerText = "Mainframe computing...";
             
-            setTimeout(aiMove, 500); 
+            setTimeout(aiMove, 400); 
         }
 
         function executeMove(cell, index, player) {
@@ -139,18 +179,49 @@
         }
 
         function aiMove() {
-            // Find all remaining empty spots
-            let emptyIndices = [];
-            boardState.forEach((val, idx) => {
-                if (val === "") emptyIndices.push(idx);
-            });
+            let currentDifficulty = parseInt(slider.value);
+            let targetIndex = -1;
 
-            if (emptyIndices.length > 0) {
-                // Simple AI: Picks a random available square
-                const randomIndex = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+            // --- SMART STRATEGY SCANNING ---
+            // 1. Can AI Win right now? (Checks on Hard and Medium)
+            if (currentDifficulty >= 2) {
+                targetIndex = findStrategicMove("O"); 
+            }
+
+            // 2. Does AI need to block the human player? (Checks on Hard, and 50% chance on Medium)
+            if (targetIndex === -1 && currentDifficulty >= 2) {
+                if (currentDifficulty === 3 || Math.random() < 0.5) {
+                    targetIndex = findStrategicMove("X");
+                }
+            }
+
+            // 3. Positional Strategy (Only on Hard)
+            if (targetIndex === -1 && currentDifficulty === 3) {
+                // Take the center if it's free
+                if (boardState[4] === "") {
+                    targetIndex = 4;
+                } else {
+                    // Try to claim a corner node
+                    let corners = [0, 2, 6, 8].filter(idx => boardState[idx] === "");
+                    if (corners.length > 0) {
+                        targetIndex = corners[Math.floor(Math.random() * corners.length)];
+                    }
+                }
+            }
+
+            // 4. Default: Pick a completely random empty square (Easy fallback)
+            if (targetIndex === -1) {
+                let emptyIndices = [];
+                boardState.forEach((val, idx) => { if (val === "") emptyIndices.push(idx); });
+                if (emptyIndices.length > 0) {
+                    targetIndex = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+                }
+            }
+
+            // Execute the decided move
+            if (targetIndex !== -1) {
                 const cells = document.getElementsByClassName("cell");
-                
-                executeMove(cells[randomIndex], randomIndex, "O");
+                executeMove(cells[targetIndex], targetIndex, "O");
 
                 if (checkWin("O")) {
                     statusDisplay.innerText = "🤖 Mainframe wins! Better luck next cycle.";
@@ -164,10 +235,27 @@
                     return;
                 }
 
-                // Return control back to the player
                 statusDisplay.innerText = "Your turn (X)";
                 gameActive = true;
             }
+        }
+
+        // Helper function that looks ahead for lines with 2 matching symbols and 1 blank spot
+        function findStrategicMove(playerSymbol) {
+            for (let condition of winningConditions) {
+                let count = 0;
+                let emptyIndex = -1;
+
+                for (let index of condition) {
+                    if (boardState[index] === playerSymbol) count++;
+                    else if (boardState[index] === "") emptyIndex = index;
+                }
+
+                if (count === 2 && emptyIndex !== -1) {
+                    return emptyIndex; // Return the index needed to secure or block a win
+                }
+            }
+            return -1;
         }
 
         function checkWin(player) {
@@ -188,7 +276,7 @@
             const cells = document.getElementsByClassName("cell");
             for (let cell of cells) {
                 cell.innerText = "";
-                cell.className = "cell"; // Wipes out 'X', 'O', and 'taken' classes
+                cell.className = "cell";
             }
         }
     </script>
