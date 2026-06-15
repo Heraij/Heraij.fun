@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Puzzles</title>
+    <title>Cyber-Tactics Chess Puzzles</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 
@@ -21,7 +21,7 @@
         #status { font-size: 1.2rem; color: #e94560; margin-bottom: 20px; min-height: 1.5em; }
         #rating { color: #888; margin-bottom: 15px; font-weight: bold; }
 
-        /* --- THE BOARD --- */
+        /* --- THE BOARD CONTAINER --- */
         .board-container {
             display: inline-block;
             background-color: #0f3460;
@@ -42,6 +42,9 @@
             justify-content: center;
             font-size: 2.2rem;
             cursor: pointer;
+            width: 45px;
+            height: 45px;
+            box-sizing: border-box;
             transition: background-color 0.15s;
         }
 
@@ -56,6 +59,11 @@
         }
 
         /* Pure Text Piece Color Overlays */
+        .piece {
+            display: block;
+            line-height: 45px;
+            height: 45px;
+        }
         .piece.w { color: #ffffff; filter: drop-shadow(0px 0px 2px #000); }
         .piece.b { color: #1a1a2e; }
 
@@ -114,18 +122,6 @@
             'P': '♟', 'R': '♜', 'N': '♞', 'B': '♝', 'Q': '♛', 'K': '♚'
         };
 
-        const squareNames = [
-            'a8','b8','c8','d8','e8','f8','g8','h8',
-            'a7','b7','c7','d7','e7','f7','g7','h7',
-            'a6','b6','c6','d6','e6','f6','g6','h6',
-            'a5','b5','c5','d5','e5','f6','g5','h5', // Chess.js safety alignment array mapping
-            'a5','b5','c5','d5','e5','f5','g5','h5',
-            'a4','b4','c4','d4','e4','f4','g4','h4',
-            'a3','b3','c3','d3','e3','f3','g3','h3',
-            'a2','b2','c2','d2','e2','f2','g2','h2',
-            'a1','b1','c1','d1','e1','f1','g1','h1'
-        ];
-
         // Renders the board view manually from chess.js matrix data
         function drawBoard() {
             const boardElement = document.getElementById("chess-board");
@@ -134,12 +130,13 @@
             // Flip rendering perspective automatically depending on if playing black or white side
             let isWhite = (playerColor === 'w');
             
+            // Loop through the 8x8 matrix grid
             for (let row = 0; row < 8; row++) {
                 for (let col = 0; col < 8; col++) {
                     let actualRow = isWhite ? row : 7 - row;
                     let actualCol = isWhite ? col : 7 - col;
                     
-                    // Generate algebraic square mapping ID (e.g. "e4")
+                    // Generate correct standard board coordinates
                     let files = ['a','b','c','d','e','f','g','h'];
                     let ranks = ['8','7','6','5','4','3','2','1'];
                     let squareName = files[actualCol] + ranks[actualRow];
@@ -200,9 +197,11 @@
                     return;
                 }
 
-                // Verify move against sequence array target
+                // Verify move against solution sequence array target
                 let moveUci = source + target;
-                if (moveUci === puzzleSolutions[currentMoveIndex]) {
+                if (moveUci === puzzleSolutions[currentMoveIndex] || 
+                    (move.promotion && (source + target + 'q') === puzzleSolutions[currentMoveIndex])) {
+                    
                     currentMoveIndex++;
                     drawBoard();
 
@@ -250,11 +249,15 @@
                 
                 document.getElementById('rating').innerText = `Puzzle Rating: ${data.puzzle.rating}`;
                 
+                // Initialize the game instance with the exact FEN puzzle layout positions
                 game = new Chess(fen);
                 playerColor = game.turn(); 
 
+                // Draw the unique mid-game position state
                 drawBoard();
                 document.getElementById('status').innerText = "Opponent just played. Counter it!";
+                
+                // Fire the initial setup move
                 setTimeout(makeComputerMove, 600);
 
             } catch (error) {
