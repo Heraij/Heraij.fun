@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber-Craft 3D Matrix</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a1a2e;
+            font-family: 'Segoe UI', sans-serif;
+            user-select: none;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            text-align: center;
+            pointer-events: none; /* Let clicks pass through to the game */
+        }
+        h1 { color: #00f2fe; margin: 0 0 5px 0; text-shadow: 0 0 10px rgba(0, 242, 254, 0.5); }
+        #controls { background: rgba(15, 52, 96, 0.8); padding: 8px 15px; border-radius: 5px; border: 1px solid #00f2fe; font-size: 0.9rem; }
+        
+        /* Crosshair in the dead center of the screen */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: #e94560;
+        }
+        #crosshair::before { top: 4px; left: 0; width: 10px; height: 2px; }
+        #crosshair::after { top: 0; left: 4px; width: 2px; height: 10px; }
+
+        .home-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: #888;
+            border: 1px solid #444;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        .home-btn:hover { color: #fff; border-color: #fff; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <h1>🛠️ Cyber-Craft 🛠️</h1>
+        <div id="controls">Click Screen to Look Around<br>WASD = Move | Left Click = Place | Right Click = Destroy</div>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <button class="home-btn" onclick="window.location.href='index.html'">Back to Arcade</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- 1. INITIALIZING THE 3D WORLD GRID ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05); // Cool cyber-fog effect
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. LIGHTING SYSTEMS ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0x00f2fe, 0.8);
+        directionalLight.position.set(10, 20, 15);
+        scene.add(directionalLight);
+
+        // --- 3. GEOMETRY AND MATERIAL MATRICES ---
+        const blockSize = 1;
+        const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+        
+        // Custom dynamic neon textures using Canvas
+        function createNeonMaterial(colorHex) {
+            return new THREE.MeshLambertMaterial({
+                color: colorHex,
+                emissive: colorHex,
+                emissiveIntensity: 0.15,
+                wireframe: false
+            });
+        }
+        const blockMaterial = createNeonMaterial(0x0f3460);
+        
+        // Wireframe overlay geometry to outline individual blocks
+        const edgesGeometry = new THREE.EdgesGeometry(blockGeometry);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00f2fe, linewidth: 2 });
+
+        // Generate the initial flat landscape terrain grid base
+        const blocksArray = [];
+        const terrainSize = 16;
+        for (let x = -terrainSize/2; x < terrainSize/2; x++) {
+            for (let z = -terrainSize/2; z < terrainSize/2; z++) {
+                spawnBlock(x, -1, z);
+            }
+        }
+
+        function spawnBlock(x, y, z) {
+            const mesh = new THREE.Mesh(blockGeometry, blockMaterial);
+            mesh.position.set(x, y, z);
+            scene.add(mesh);
+
+            // Add the wireframe cyber lines onto the box
+            const wireframe = new THREE.LineSegments(edgesGeometry, lineMaterial);
+            mesh.add(wireframe);
+            
+            blocksArray.push(mesh);
+        }
+
+        // --- 4. PLAYER MOVEMENT & CAMERA LOOK (PointerLock API) ---
+        camera.position.set(0, 1.5, 5);
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+
+        // Lock mouse pointer to the window on screen click
+        document.body.addEventListener('click', () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                camera.rotation.y -= e.movementX * 0.002;
+                camera.rotation.x -= e.movementY * 0.002;
+                // Cap vertical rotation so you don't flip upside down
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            }
+        });
+
+        // Capture key movements
+        const onKeyDown = (e) => {
+            switch (e.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyD': moveRight = true; break;
+            }
+        };
+        const onKeyUp = (e) => {
+            switch (e.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+
+        // --- 5. RAYCASTING: INTERACTING WITH BLOCKS (BUILD/DESTROY) ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(0, 0); // Always center screen because of pointer lock
+
+        document.addEventListener('mousedown', (e) => {
+            if (document.pointerLockElement !== document.body) return;
+
+            // Cast a vector ray pointing directly where the crosshair is looking
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(blocksArray);
+
+            if (intersects.length > 0 && intersects[0].distance < 8) {
+                const intersect = intersects[0];
+
+                if (e.button === 0) {
+                    // LEFT CLICK: Place Block based on the target face normal vector coordinate
+                    const normal = intersect.face.normal;
+                    const newPosition = intersect.object.position.clone().add(normal);
+                    spawnBlock(newPosition.x, newPosition.y, newPosition.z);
+                } 
+                else if (e.button === 2) {
+                    // RIGHT CLICK: Destroy Block
+                    scene.remove(intersect.object);
+                    const index = blocksArray.indexOf(intersect.object);
+                    if (index > -1) blocksArray.splice(index, 1);
+                }
+            }
+        });
+
+        // Prevent standard right-click context menu loop popups from interrupting gameplay
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // --- 6. CORE GAME ENGINE LOOP ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (document.pointerLockElement === document.body) {
+                const delta = clock.getDelta();
+
+                // Calculate decay drag slowing down
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize(); 
+
+                // Move relative to where the camera is looking
+                if (moveForward || moveBackward) velocity.z -= direction.z * 40.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 40.0 * delta;
+
+                camera.translateX(-velocity.x * delta);
+                camera.translateZ(velocity.z * delta);
+                
+                // Lock height position so player walks flatly across the plane
+                camera.position.y = 1.2; 
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Adjust perspective if user scales window size
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
