@@ -168,16 +168,20 @@
                 playerColor = game.turn(); 
 
                 // Initialize or refresh visual board configuration
-                const config = {
-                    draggable: true,
-                    position: fen,
-                    orientation: playerColor === 'w' ? 'white' : 'black',
-                    onDragStart: onDragStart,
-                    onDrop: onDrop,
-                    onSnapEnd: onSnapEnd
-                };
+            // Initialize or refresh visual board configuration
+const config = {
+    pieceTheme: 'https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/img/chesspieces/wikipedia/{piece}.png',
+    draggable: true,
+    position: fen,
+    orientation: playerColor === 'w' ? 'white' : 'black',
+    onDragStart: onDragStart,
+    onDrop: onDrop,
+    onSnapEnd: onSnapEnd
+};
+
+board = Chessboard('myBoard', config);
                 
-                board = Chessboard('myBoard', config);
+            
 
                 // Play the opponent's initial setup move before player takes control
                 document.getElementById('status').innerText = "Opponent just played. Counter it!";
