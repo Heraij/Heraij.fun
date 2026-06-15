@@ -70,7 +70,7 @@
 
     <button class="home-btn" onclick="window.location.href='index.html'">Back to Arcade</button>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
         // --- 1. INITIALIZING THE 3D WORLD GRID ---
@@ -86,54 +86,91 @@
         // --- 2. LIGHTING SYSTEMS ---
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0x00f2fe, 0.8);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(10, 20, 15);
         scene.add(directionalLight);
 
-        // --- 3. GEOMETRY AND MATERIAL MATRICES ---
+        // --- 3. GEOMETRY, MATERIALS, & PALETTES ---
         const blockSize = 1;
         const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-        
-        function createNeonMaterial(colorHex) {
-            return new THREE.MeshLambertMaterial({
-                color: colorHex,
-                emissive: colorHex,
-                emissiveIntensity: 0.15,
-            });
-        }
-        const blockMaterial = createNeonMaterial(0x0f3460);
-        
         const edgesGeometry = new THREE.EdgesGeometry(blockGeometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00f2fe, linewidth: 2 });
 
+        // Color Palette Configuration Matrix
+        const materialsPalette = {
+            '1': { color: 0x0f3460, glow: 0x00f2fe, name: "Cyan Core" },    // Key 1
+            '2': { color: 0x53123c, glow: 0xe94560, name: "Cyber Pink" },  // Key 2
+            '3': { color: 0x5f5f10, glow: 0xffff00, name: "Laser Yellow" },// Key 3
+            '4': { color: 0x0a4013, glow: 0x00ff66, name: "Matrix Green" } // Key 4
+        };
+        let currentPaletteKey = '1';
+
+        // Helper function to create materials with specific glow trims
+        function getBlockMaterials(key) {
+            const config = materialsPalette[key];
+            const meshMat = new THREE.MeshLambertMaterial({
+                color: config.color,
+                emissive: config.color,
+                emissiveIntensity: 0.2
+            });
+            const lineMat = new THREE.LineBasicMaterial({ color: config.glow, linewidth: 2 });
+            return { meshMat, lineMat };
+        }
+
+        // Global Block Tracking Arrays
         const blocksArray = [];
+        const worldMap = {}; // Fast 3D coordinate dictionary lookup for collisions
+
+        // Terrain generation
         const terrainSize = 16;
         for (let x = -terrainSize/2; x < terrainSize/2; x++) {
             for (let z = -terrainSize/2; z < terrainSize/2; z++) {
-                spawnBlock(x, -1, z);
+                spawnBlock(x, -1, z, '1');
             }
         }
 
-        function spawnBlock(x, y, z) {
-            const mesh = new THREE.Mesh(blockGeometry, blockMaterial);
-            mesh.position.set(x, y, z);
+        function spawnBlock(x, y, z, colorKey) {
+            // Round coordinates tightly to fit an exact integer voxel grid system
+            const gridX = Math.round(x);
+            const gridY = Math.round(y);
+            const gridZ = Math.round(z);
+            const coordKey = `${gridX},${gridY},${gridZ}`;
+
+            // Prevent placing two blocks in the exact same spatial grid slot
+            if (worldMap[coordKey]) return;
+
+            const mats = getBlockMaterials(colorKey);
+            const mesh = new THREE.Mesh(blockGeometry, mats.meshMat);
+            mesh.position.set(gridX, gridY, gridZ);
             scene.add(mesh);
 
-            const wireframe = new THREE.LineSegments(edgesGeometry, lineMaterial);
+            const wireframe = new THREE.LineSegments(edgesGeometry, mats.lineMat);
             mesh.add(wireframe);
             
+            // Store block references for Raycasting and Physics calculations
+            mesh.userData = { coordKey: coordKey };
             blocksArray.push(mesh);
+            worldMap[coordKey] = true;
         }
 
-        // --- 4. PLAYER MOVEMENT, PHYSICS, & CAMERA LOOK ---
-        camera.position.set(0, 1.2, 5); // Start slightly above the ground layer
+        function removeBlock(mesh) {
+            if (!mesh) return;
+            const coordKey = mesh.userData.coordKey;
+            delete worldMap[coordKey];
+            scene.remove(mesh);
+            const index = blocksArray.indexOf(mesh);
+            if (index > -1) blocksArray.splice(index, 1);
+        }
+
+        // --- 4. PLAYER PHYSICS ENGINE & CONTROLS ---
+        camera.position.set(0, 2, 5);
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
         
-        // Physics Vectors
         let velocity = new THREE.Vector3();
         let direction = new THREE.Vector3();
-        let canJump = false; // Prevents flying/infinite jumps in mid-air
-        const playerHeight = 1.2;
+        let canJump = false;
+
+        const playerRadius = 0.35; // Player width bounding box definition
+        const playerHeight = 1.6;  // Total height view simulation segment
 
         document.body.addEventListener('click', () => {
             document.body.requestPointerLock();
@@ -147,8 +184,12 @@
             }
         });
 
-        // Capture key movements + Spacebar for Jump
         const onKeyDown = (e) => {
+            if (materialsPalette[e.key]) {
+                currentPaletteKey = e.key;
+                document.getElementById('controls').innerHTML = `Active Voxel Matrix: <span style="color:#00f2fe; font-weight:bold;">${materialsPalette[currentPaletteKey].name}</span><br>WASD = Move | Space = Jump | 1-4 = Swap Colors | Clicks = Edit`;
+                return;
+            }
             switch (e.code) {
                 case 'KeyW': moveForward = true; break;
                 case 'KeyS': moveBackward = true; break;
@@ -156,12 +197,13 @@
                 case 'KeyD': moveRight = true; break;
                 case 'Space': 
                     if (canJump === true) {
-                        velocity.y += 12.0; // Apply upward jump force impulse vector
+                        velocity.y += 10.5; // Jump upward burst velocity vector
                         canJump = false;
                     }
                     break;
             }
         };
+        
         const onKeyUp = (e) => {
             switch (e.code) {
                 case 'KeyW': moveForward = false; break;
@@ -173,7 +215,7 @@
         document.addEventListener('keydown', onKeyDown);
         document.addEventListener('keyup', onKeyUp);
 
-        // --- 5. RAYCASTING: BUILD/DESTROY ---
+        // --- 5. RAYCASTING INTERACTION PIPELINE ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2(0, 0);
 
@@ -187,55 +229,128 @@
                 const intersect = intersects[0];
 
                 if (e.button === 0) {
+                    // LEFT CLICK: Read surface angle vector to place a block next to it
                     const normal = intersect.face.normal;
-                    const newPosition = intersect.object.position.clone().add(normal);
-                    spawnBlock(newPosition.x, newPosition.y, newPosition.z);
+                    const newPos = intersect.object.position.clone().add(normal);
+                    
+                    // Don't let players materialize blocks right inside their own body
+                    const pGridX = Math.round(camera.position.x);
+                    const pGridZ = Math.round(camera.position.z);
+                    if(Math.round(newPos.x) === pGridX && Math.round(newPos.z) === pGridZ && Math.round(newPos.y) >= Math.floor(camera.position.y - playerHeight) && Math.round(newPos.y) <= Math.ceil(camera.position.y)) {
+                        return; 
+                    }
+                    spawnBlock(newPos.x, newPos.y, newPos.z, currentPaletteKey);
                 } 
                 else if (e.button === 2) {
-                    scene.remove(intersect.object);
-                    const index = blocksArray.indexOf(intersect.object);
-                    if (index > -1) blocksArray.splice(index, 1);
+                    // RIGHT CLICK: Remove targeted voxel mesh
+                    // Protect the baseline ground block row layer y = -1 from absolute void deletion
+                    if (intersect.object.position.y > -1) {
+                        removeBlock(intersect.object);
+                    }
                 }
             }
         });
 
         document.addEventListener('contextmenu', e => e.preventDefault());
 
-        // --- 6. CORE GAME ENGINE LOOP WITH GRAVITY ---
+        // --- 6. AXIAL 3D GRID BLOCK COLLISION DETECTOR ---
+        function checkBlockOccupied(x, y, z) {
+            return worldMap[`${Math.round(x)},${Math.round(y)},${Math.round(z)}`] === true;
+        }
+
+        function handlePlayerCollisions(oldPos) {
+            let pX = camera.position.x;
+            let pY = camera.position.y;
+            let pZ = camera.position.z;
+
+            // Find the bottom bounding index level where your feet rest
+            let feetY = Math.floor(pY - playerHeight + 0.1);
+            let torsoY = Math.floor(pY - playerHeight/2);
+            let headY = Math.floor(pY - 0.1);
+
+            // A. CEILING & VERTICAL HEAD CRASH DETECTOR
+            if (velocity.y > 0) {
+                let ceilingLevel = Math.floor(pY + 0.2);
+                if (checkBlockOccupied(pX, ceilingLevel, pZ)) {
+                    camera.position.y = oldPos.y;
+                    velocity.y = 0;
+                }
+            }
+
+            // B. LATERAL WALL CHECKING MECHANISM (X-Axis)
+            let xOffset = (pX > oldPos.x) ? playerRadius : -playerRadius;
+            if (checkBlockOccupied(pX + xOffset, feetY, pZ) || 
+                checkBlockOccupied(pX + xOffset, torsoY, pZ) ||
+                checkBlockOccupied(pX + xOffset, headY, pZ)) {
+                camera.position.x = oldPos.x; // Block movement along the X corridor
+            }
+
+            // C. LATERAL WALL CHECKING MECHANISM (Z-Axis)
+            let zOffset = (pZ > oldPos.z) ? playerRadius : -playerRadius;
+            if (checkBlockOccupied(pX, feetY, pZ + zOffset) || 
+                checkBlockOccupied(pX, torsoY, pZ + zOffset) ||
+                checkBlockOccupied(pX, headY, pZ + zOffset)) {
+                camera.position.z = oldPos.z; // Block movement along the Z corridor
+            }
+
+            // D. FLOOR STANDING PHYSICS (Y-Axis)
+            let currentFootBlockY = Math.floor(camera.position.y - playerHeight);
+            
+            // Check if there is a block underneath your feet radius perimeter zone
+            let standingOnBlock = checkBlockOccupied(camera.position.x, currentFootBlockY, camera.position.z) ||
+                                  checkBlockOccupied(camera.position.x + playerRadius, currentFootBlockY, camera.position.z) ||
+                                  checkBlockOccupied(camera.position.x - playerRadius, currentFootBlockY, camera.position.z) ||
+                                  checkBlockOccupied(camera.position.x, currentFootBlockY, camera.position.z + playerRadius) ||
+                                  checkBlockOccupied(camera.position.x, currentFootBlockY, camera.position.z - playerRadius);
+
+            if (standingOnBlock && velocity.y <= 0) {
+                camera.position.y = currentFootBlockY + 1 + playerHeight; // Snap straight onto block surface
+                velocity.y = 0;
+                canJump = true;
+            } else {
+                canJump = false; // Player is actively tumbling or mid-air airborne
+            }
+
+            // Out-of-bounds safety catch-net (If you manage to clip out of bounds into the void)
+            if (camera.position.y < -20) {
+                camera.position.set(0, 4, 0);
+                velocity.set(0,0,0);
+            }
+        }
+
+        // --- 7. CORE RUNNING ANIMATION LOOP ---
         const clock = new THREE.Clock();
 
         function animate() {
             requestAnimationFrame(animate);
 
             if (document.pointerLockElement === document.body) {
-                const delta = clock.getDelta();
+                const delta = Math.min(clock.getDelta(), 0.1); // Guard cap delta step sizing limits
 
-                // 1. Apply Horizontal Friction/Drag
+                // Preserve existing position footprint context before executing step alterations
+                const oldPosition = camera.position.clone();
+
+                // Decelerating drag friction
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
 
-                // 2. Apply Gravity (Pulls down on the Y axis every single frame)
-                velocity.y -= 9.8 * 3.5 * delta; // 9.8 m/s^2 multiplied for arcade snappiness
+                // Apply gravity vector drag constants downwards
+                velocity.y -= 9.8 * 3.2 * delta;
 
                 direction.z = Number(moveForward) - Number(moveBackward);
                 direction.x = Number(moveRight) - Number(moveLeft);
                 direction.normalize(); 
 
-                if (moveForward || moveBackward) velocity.z -= direction.z * 40.0 * delta;
-                if (moveLeft || moveRight) velocity.x -= direction.x * 40.0 * delta;
+                if (moveForward || moveBackward) velocity.z -= direction.z * 36.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 36.0 * delta;
 
-                // 3. Move Camera position based on calculated velocity forces
+                // Translate position
                 camera.translateX(-velocity.x * delta);
                 camera.translateZ(velocity.z * delta);
-                camera.position.y += velocity.y * delta; // Update vertical height change
+                camera.position.y += velocity.y * delta;
 
-                // 4. Basic Ground Collision Boundary Check
-                // If you fall below the initial base block level, snap back and allow jumping again
-                if (camera.position.y < playerHeight) {
-                    velocity.y = 0;
-                    camera.position.y = playerHeight;
-                    canJump = true;
-                }
+                // Evaluate positions against block layout data
+                handlePlayerCollisions(oldPosition);
             }
 
             renderer.render(scene, camera);
@@ -246,6 +361,305 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        // Initialize UI display message header status readouts
+        document.getElementById('controls').innerHTML = `Active Voxel Matrix: <span style="color:#00f2fe; font-weight:bold;">${materialsPalette[currentPaletteKey].name}</span><br>WASD = Move | Space = Jump | 1-4 = Swap Colors | Clicks = Edit`;
+
+        animate();
+    </script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- 1. INITIALIZING THE 3D WORLD GRID ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. LIGHTING SYSTEMS ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 15);
+        scene.add(directionalLight);
+
+        // --- 3. GEOMETRY, MATERIALS, & PALETTES ---
+        const blockSize = 1;
+        const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+        const edgesGeometry = new THREE.EdgesGeometry(blockGeometry);
+
+        // Color Palette Configuration Matrix
+        const materialsPalette = {
+            '1': { color: 0x0f3460, glow: 0x00f2fe, name: "Cyan Core" },    // Key 1
+            '2': { color: 0x53123c, glow: 0xe94560, name: "Cyber Pink" },  // Key 2
+            '3': { color: 0x5f5f10, glow: 0xffff00, name: "Laser Yellow" },// Key 3
+            '4': { color: 0x0a4013, glow: 0x00ff66, name: "Matrix Green" } // Key 4
+        };
+        let currentPaletteKey = '1';
+
+        // Helper function to create materials with specific glow trims
+        function getBlockMaterials(key) {
+            const config = materialsPalette[key];
+            const meshMat = new THREE.MeshLambertMaterial({
+                color: config.color,
+                emissive: config.color,
+                emissiveIntensity: 0.2
+            });
+            const lineMat = new THREE.LineBasicMaterial({ color: config.glow, linewidth: 2 });
+            return { meshMat, lineMat };
+        }
+
+        // Global Block Tracking Arrays
+        const blocksArray = [];
+        const worldMap = {}; // Fast 3D coordinate dictionary lookup for collisions
+
+        // Terrain generation
+        const terrainSize = 16;
+        for (let x = -terrainSize/2; x < terrainSize/2; x++) {
+            for (let z = -terrainSize/2; z < terrainSize/2; z++) {
+                spawnBlock(x, -1, z, '1');
+            }
+        }
+
+        function spawnBlock(x, y, z, colorKey) {
+            // Round coordinates tightly to fit an exact integer voxel grid system
+            const gridX = Math.round(x);
+            const gridY = Math.round(y);
+            const gridZ = Math.round(z);
+            const coordKey = `${gridX},${gridY},${gridZ}`;
+
+            // Prevent placing two blocks in the exact same spatial grid slot
+            if (worldMap[coordKey]) return;
+
+            const mats = getBlockMaterials(colorKey);
+            const mesh = new THREE.Mesh(blockGeometry, mats.meshMat);
+            mesh.position.set(gridX, gridY, gridZ);
+            scene.add(mesh);
+
+            const wireframe = new THREE.LineSegments(edgesGeometry, mats.lineMat);
+            mesh.add(wireframe);
+            
+            // Store block references for Raycasting and Physics calculations
+            mesh.userData = { coordKey: coordKey };
+            blocksArray.push(mesh);
+            worldMap[coordKey] = true;
+        }
+
+        function removeBlock(mesh) {
+            if (!mesh) return;
+            const coordKey = mesh.userData.coordKey;
+            delete worldMap[coordKey];
+            scene.remove(mesh);
+            const index = blocksArray.indexOf(mesh);
+            if (index > -1) blocksArray.splice(index, 1);
+        }
+
+        // --- 4. PLAYER PHYSICS ENGINE & CONTROLS ---
+        camera.position.set(0, 2, 5);
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let canJump = false;
+
+        const playerRadius = 0.35; // Player width bounding box definition
+        const playerHeight = 1.6;  // Total height view simulation segment
+
+        document.body.addEventListener('click', () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                camera.rotation.y -= e.movementX * 0.002;
+                camera.rotation.x -= e.movementY * 0.002;
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            }
+        });
+
+        const onKeyDown = (e) => {
+            if (materialsPalette[e.key]) {
+                currentPaletteKey = e.key;
+                document.getElementById('controls').innerHTML = `Active Voxel Matrix: <span style="color:#00f2fe; font-weight:bold;">${materialsPalette[currentPaletteKey].name}</span><br>WASD = Move | Space = Jump | 1-4 = Swap Colors | Clicks = Edit`;
+                return;
+            }
+            switch (e.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'Space': 
+                    if (canJump === true) {
+                        velocity.y += 10.5; // Jump upward burst velocity vector
+                        canJump = false;
+                    }
+                    break;
+            }
+        };
+        
+        const onKeyUp = (e) => {
+            switch (e.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+
+        // --- 5. RAYCASTING INTERACTION PIPELINE ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(0, 0);
+
+        document.addEventListener('mousedown', (e) => {
+            if (document.pointerLockElement !== document.body) return;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(blocksArray);
+
+            if (intersects.length > 0 && intersects[0].distance < 8) {
+                const intersect = intersects[0];
+
+                if (e.button === 0) {
+                    // LEFT CLICK: Read surface angle vector to place a block next to it
+                    const normal = intersect.face.normal;
+                    const newPos = intersect.object.position.clone().add(normal);
+                    
+                    // Don't let players materialize blocks right inside their own body
+                    const pGridX = Math.round(camera.position.x);
+                    const pGridZ = Math.round(camera.position.z);
+                    if(Math.round(newPos.x) === pGridX && Math.round(newPos.z) === pGridZ && Math.round(newPos.y) >= Math.floor(camera.position.y - playerHeight) && Math.round(newPos.y) <= Math.ceil(camera.position.y)) {
+                        return; 
+                    }
+                    spawnBlock(newPos.x, newPos.y, newPos.z, currentPaletteKey);
+                } 
+                else if (e.button === 2) {
+                    // RIGHT CLICK: Remove targeted voxel mesh
+                    // Protect the baseline ground block row layer y = -1 from absolute void deletion
+                    if (intersect.object.position.y > -1) {
+                        removeBlock(intersect.object);
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // --- 6. AXIAL 3D GRID BLOCK COLLISION DETECTOR ---
+        function checkBlockOccupied(x, y, z) {
+            return worldMap[`${Math.round(x)},${Math.round(y)},${Math.round(z)}`] === true;
+        }
+
+        function handlePlayerCollisions(oldPos) {
+            let pX = camera.position.x;
+            let pY = camera.position.y;
+            let pZ = camera.position.z;
+
+            // Find the bottom bounding index level where your feet rest
+            let feetY = Math.floor(pY - playerHeight + 0.1);
+            let torsoY = Math.floor(pY - playerHeight/2);
+            let headY = Math.floor(pY - 0.1);
+
+            // A. CEILING & VERTICAL HEAD CRASH DETECTOR
+            if (velocity.y > 0) {
+                let ceilingLevel = Math.floor(pY + 0.2);
+                if (checkBlockOccupied(pX, ceilingLevel, pZ)) {
+                    camera.position.y = oldPos.y;
+                    velocity.y = 0;
+                }
+            }
+
+            // B. LATERAL WALL CHECKING MECHANISM (X-Axis)
+            let xOffset = (pX > oldPos.x) ? playerRadius : -playerRadius;
+            if (checkBlockOccupied(pX + xOffset, feetY, pZ) || 
+                checkBlockOccupied(pX + xOffset, torsoY, pZ) ||
+                checkBlockOccupied(pX + xOffset, headY, pZ)) {
+                camera.position.x = oldPos.x; // Block movement along the X corridor
+            }
+
+            // C. LATERAL WALL CHECKING MECHANISM (Z-Axis)
+            let zOffset = (pZ > oldPos.z) ? playerRadius : -playerRadius;
+            if (checkBlockOccupied(pX, feetY, pZ + zOffset) || 
+                checkBlockOccupied(pX, torsoY, pZ + zOffset) ||
+                checkBlockOccupied(pX, headY, pZ + zOffset)) {
+                camera.position.z = oldPos.z; // Block movement along the Z corridor
+            }
+
+            // D. FLOOR STANDING PHYSICS (Y-Axis)
+            let currentFootBlockY = Math.floor(camera.position.y - playerHeight);
+            
+            // Check if there is a block underneath your feet radius perimeter zone
+            let standingOnBlock = checkBlockOccupied(camera.position.x, currentFootBlockY, camera.position.z) ||
+                                  checkBlockOccupied(camera.position.x + playerRadius, currentFootBlockY, camera.position.z) ||
+                                  checkBlockOccupied(camera.position.x - playerRadius, currentFootBlockY, camera.position.z) ||
+                                  checkBlockOccupied(camera.position.x, currentFootBlockY, camera.position.z + playerRadius) ||
+                                  checkBlockOccupied(camera.position.x, currentFootBlockY, camera.position.z - playerRadius);
+
+            if (standingOnBlock && velocity.y <= 0) {
+                camera.position.y = currentFootBlockY + 1 + playerHeight; // Snap straight onto block surface
+                velocity.y = 0;
+                canJump = true;
+            } else {
+                canJump = false; // Player is actively tumbling or mid-air airborne
+            }
+
+            // Out-of-bounds safety catch-net (If you manage to clip out of bounds into the void)
+            if (camera.position.y < -20) {
+                camera.position.set(0, 4, 0);
+                velocity.set(0,0,0);
+            }
+        }
+
+        // --- 7. CORE RUNNING ANIMATION LOOP ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (document.pointerLockElement === document.body) {
+                const delta = Math.min(clock.getDelta(), 0.1); // Guard cap delta step sizing limits
+
+                // Preserve existing position footprint context before executing step alterations
+                const oldPosition = camera.position.clone();
+
+                // Decelerating drag friction
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                // Apply gravity vector drag constants downwards
+                velocity.y -= 9.8 * 3.2 * delta;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize(); 
+
+                if (moveForward || moveBackward) velocity.z -= direction.z * 36.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 36.0 * delta;
+
+                // Translate position
+                camera.translateX(-velocity.x * delta);
+                camera.translateZ(velocity.z * delta);
+                camera.position.y += velocity.y * delta;
+
+                // Evaluate positions against block layout data
+                handlePlayerCollisions(oldPosition);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize UI display message header status readouts
+        document.getElementById('controls').innerHTML = `Active Voxel Matrix: <span style="color:#00f2fe; font-weight:bold;">${materialsPalette[currentPaletteKey].name}</span><br>WASD = Move | Space = Jump | 1-4 = Swap Colors | Clicks = Edit`;
 
         animate();
     </script>
