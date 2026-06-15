@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Core Clicker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1a1a2e;
+            color: #fff;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            user-select: none; /* Prevents text highlighting while clicking fast */
+        }
+        h1 { color: #00f2fe; margin-bottom: 5px; }
+        .subtitle { color: #888; margin-bottom: 20px; }
+
+        .game-container {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+
+        /* --- LEFT SIDE: THE CORE --- */
+        .clicker-section {
+            flex: 1;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #plasma-display { font-size: 2.5rem; font-weight: bold; color: #e94560; margin: 10px 0; }
+        #pps-display { font-size: 1.1rem; color: #00f2fe; margin-bottom: 20px; }
+        
+        /* The Big Button */
+        #core {
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, #00f2fe 0%, #0f3460 70%);
+            border-radius: 50%;
+            border: 5px solid #00f2fe;
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.6);
+            cursor: pointer;
+            transition: transform 0.05s, box-shadow 0.1s;
+        }
+        #core:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 50px rgba(0, 242, 254, 0.9);
+        }
+
+        /* --- RIGHT SIDE: UPGRADES --- */
+        .shop-section {
+            flex: 1;
+            min-width: 300px;
+            background-color: #16213e;
+            border: 2px solid #0f3460;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: left;
+        }
+        .shop-section h2 { margin-top: 0; color: #00f2fe; border-bottom: 2px solid #0f3460; padding-bottom: 10px; }
+        
+        .upgrade-btn {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #0f3460;
+            color: white;
+            border: 1px solid #1a1a2e;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+        .upgrade-btn:hover:not(:disabled) { background-color: #e94560; }
+        .upgrade-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .upgrade-info span { display: block; font-size: 0.8rem; color: #ccc; }
+
+        /* --- THE TWIST: ANOMALY --- */
+        #anomaly {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: #ff527b;
+            border-radius: 50%;
+            box-shadow: 0 0 20px #ff527b;
+            cursor: pointer;
+            display: none;
+            z-index: 100;
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.2); }
+        }
+        
+        .home-btn {
+            background-color: transparent;
+            color: #888;
+            border: 1px solid #444;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 30px;
+        }
+        .home-btn:hover { color: #fff; border-color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h1>⚛️ Quantum Core Clicker ⚛️</h1>
+    <p class="subtitle">Harvest plasma, upgrade your grid, and watch out for anomalies!</p>
+
+    <!-- Randomly Spawning Anomaly -->
+    <div id="anomaly" onclick="triggerAnomaly()"></div>
+
+    <div class="game-container">
+        <!-- Left Column: Clicking -->
+        <div class="clicker-section">
+            <div id="plasma-display">0 Plasma</div>
+            <div id="pps-display">Generating: 0/sec</div>
+            <div id="core" onclick="clickCore()"></div>
+        </div>
+
+        <!-- Right Column: Shop -->
+        <div class="shop-section">
+            <h2>System Upgrades</h2>
+            
+            <button class="upgrade-btn" id="upg-click" onclick="buyUpgrade('click')">
+                <div class="upgrade-info">
+                    <strong>Plasma Siphon</strong>
+                    <span>+1 Plasma per manual click</span>
+                </div>
+                <div id="cost-click">Cost: 15</div>
+            </button>
+
+            <button class="upgrade-btn" id="upg-drone" onclick="buyUpgrade('drone')">
+                <div class="upgrade-info">
+                    <strong>Harvest Drone</strong>
+                    <span>Generates +1 Plasma/sec</span>
+                </div>
+                <div id="cost-drone">Cost: 50</div>
+            </button>
+
+            <button class="upgrade-btn" id="upg-node" onclick="buyUpgrade('node')">
+                <div class="upgrade-info">
+                    <strong>Quantum Node</strong>
+                    <span>Generates +8 Plasma/sec</span>
+                </div>
+                <div id="cost-node">Cost: 400</div>
+            </button>
+        </div>
+    </div>
+
+    <button class="home-btn" onclick="window.location.href='index.html'">Back to Arcade</button>
+
+    <script>
+        // Game State
+        let plasma = 0;
+        let plasmaPerClick = 1;
+        let plasmaPerSecond = 0;
+
+        let costs = { click: 15, drone: 50, node: 400 };
+        let counts = { click: 0, drone: 0, node: 0 };
+
+        // Click Logic
+        function clickCore() {
+            plasma += plasmaPerClick;
+            updateUI();
+        }
+
+        // Buy Upgrades Logic
+        function buyUpgrade(type) {
+            if (plasma >= costs[type]) {
+                plasma -= costs[type];
+                counts[type]++;
+                
+                // Calculate new mechanics & scale costs
+                if (type === 'click') {
+                    plasmaPerClick += 1;
+                    costs.click = Math.floor(costs.click * 1.5);
+                } else if (type === 'drone') {
+                    plasmaPerSecond += 1;
+                    costs.drone = Math.floor(costs.drone * 1.25);
+                } else if (type === 'node') {
+                    plasmaPerSecond += 8;
+                    costs.node = Math.floor(costs.node * 1.3);
+                }
+
+                updateUI();
+            }
+        }
+
+        // Update UI Text & Buttons
+        function updateUI() {
+            document.getElementById("plasma-display").innerText = Math.floor(plasma) + " Plasma";
+            document.getElementById("pps-display").innerText = `Generating: ${plasmaPerSecond}/sec (Clicks: +${plasmaPerClick})`;
+            
+            document.getElementById("cost-click").innerText = "Cost: " + costs.click;
+            document.getElementById("cost-drone").innerText = "Cost: " + costs.drone;
+            document.getElementById("cost-node").innerText = "Cost: " + costs.node;
+
+            // Enable/Disable buttons based on cash
+            document.getElementById("upg-click").disabled = (plasma < costs.click);
+            document.getElementById("upg-drone").disabled = (plasma < costs.drone);
+            document.getElementById("upg-node").disabled = (plasma < costs.node);
+        }
+
+        // Main Game Loop (Runs 10 times a second for smoother generation)
+        setInterval(function() {
+            if (plasmaPerSecond > 0) {
+                plasma += (plasmaPerSecond / 10);
+                updateUI();
+            }
+        }, 100);
+
+        // --- THE TWIST: ANOMALY LOGIC ---
+        const anomalyElement = document.getElementById("anomaly");
+        
+        function spawnAnomaly() {
+            // Pick random screen coordinates away from edges
+            const x = Math.random() * (window.innerWidth - 100) + 50;
+            const y = Math.random() * (window.innerHeight - 100) + 50;
+            
+            anomalyElement.style.left = x + "px";
+            anomalyElement.style.top = y + "px";
+            anomalyElement.style.display = "block";
+
+            // Make it disappear after 6 seconds if not clicked
+            setTimeout(() => {
+                anomalyElement.style.display = "none";
+            }, 6000);
+        }
+
+        function triggerAnomaly() {
+            anomalyElement.style.display = "none";
+            // Instantly awards a huge chunk of points based on your current production
+            let bonus = Math.max(50, plasmaPerSecond * 30); 
+            plasma += bonus;
+            alert(`💥 ANOMALY STABILIZED! Gained +${bonus} Plasma!`);
+            updateUI();
+        }
+
+        // Try to spawn an anomaly every 20 seconds (30% chance)
+        setInterval(() => {
+            if (Math.random() < 0.3 && anomalyElement.style.display !== "block") {
+                spawnAnomaly();
+            }
+        }, 2000);
+
+        // Initial setup
+        updateUI();
+    </script>
+</body>
+</html>
