@@ -76,7 +76,7 @@
         // --- 1. INITIALIZING THE 3D WORLD GRID ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a2e);
-        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05); // Cool cyber-fog effect
+        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -94,22 +94,18 @@
         const blockSize = 1;
         const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         
-        // Custom dynamic neon textures using Canvas
         function createNeonMaterial(colorHex) {
             return new THREE.MeshLambertMaterial({
                 color: colorHex,
                 emissive: colorHex,
                 emissiveIntensity: 0.15,
-                wireframe: false
             });
         }
         const blockMaterial = createNeonMaterial(0x0f3460);
         
-        // Wireframe overlay geometry to outline individual blocks
         const edgesGeometry = new THREE.EdgesGeometry(blockGeometry);
         const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00f2fe, linewidth: 2 });
 
-        // Generate the initial flat landscape terrain grid base
         const blocksArray = [];
         const terrainSize = 16;
         for (let x = -terrainSize/2; x < terrainSize/2; x++) {
@@ -123,20 +119,22 @@
             mesh.position.set(x, y, z);
             scene.add(mesh);
 
-            // Add the wireframe cyber lines onto the box
             const wireframe = new THREE.LineSegments(edgesGeometry, lineMaterial);
             mesh.add(wireframe);
             
             blocksArray.push(mesh);
         }
 
-        // --- 4. PLAYER MOVEMENT & CAMERA LOOK (PointerLock API) ---
-        camera.position.set(0, 1.5, 5);
+        // --- 4. PLAYER MOVEMENT, PHYSICS, & CAMERA LOOK ---
+        camera.position.set(0, 1.2, 5); // Start slightly above the ground layer
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        
+        // Physics Vectors
         let velocity = new THREE.Vector3();
         let direction = new THREE.Vector3();
+        let canJump = false; // Prevents flying/infinite jumps in mid-air
+        const playerHeight = 1.2;
 
-        // Lock mouse pointer to the window on screen click
         document.body.addEventListener('click', () => {
             document.body.requestPointerLock();
         });
@@ -145,18 +143,23 @@
             if (document.pointerLockElement === document.body) {
                 camera.rotation.y -= e.movementX * 0.002;
                 camera.rotation.x -= e.movementY * 0.002;
-                // Cap vertical rotation so you don't flip upside down
                 camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
             }
         });
 
-        // Capture key movements
+        // Capture key movements + Spacebar for Jump
         const onKeyDown = (e) => {
             switch (e.code) {
                 case 'KeyW': moveForward = true; break;
                 case 'KeyS': moveBackward = true; break;
                 case 'KeyA': moveLeft = true; break;
                 case 'KeyD': moveRight = true; break;
+                case 'Space': 
+                    if (canJump === true) {
+                        velocity.y += 12.0; // Apply upward jump force impulse vector
+                        canJump = false;
+                    }
+                    break;
             }
         };
         const onKeyUp = (e) => {
@@ -170,14 +173,13 @@
         document.addEventListener('keydown', onKeyDown);
         document.addEventListener('keyup', onKeyUp);
 
-        // --- 5. RAYCASTING: INTERACTING WITH BLOCKS (BUILD/DESTROY) ---
+        // --- 5. RAYCASTING: BUILD/DESTROY ---
         const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2(0, 0); // Always center screen because of pointer lock
+        const mouse = new THREE.Vector2(0, 0);
 
         document.addEventListener('mousedown', (e) => {
             if (document.pointerLockElement !== document.body) return;
 
-            // Cast a vector ray pointing directly where the crosshair is looking
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(blocksArray);
 
@@ -185,13 +187,11 @@
                 const intersect = intersects[0];
 
                 if (e.button === 0) {
-                    // LEFT CLICK: Place Block based on the target face normal vector coordinate
                     const normal = intersect.face.normal;
                     const newPosition = intersect.object.position.clone().add(normal);
                     spawnBlock(newPosition.x, newPosition.y, newPosition.z);
                 } 
                 else if (e.button === 2) {
-                    // RIGHT CLICK: Destroy Block
                     scene.remove(intersect.object);
                     const index = blocksArray.indexOf(intersect.object);
                     if (index > -1) blocksArray.splice(index, 1);
@@ -199,10 +199,9 @@
             }
         });
 
-        // Prevent standard right-click context menu loop popups from interrupting gameplay
         document.addEventListener('contextmenu', e => e.preventDefault());
 
-        // --- 6. CORE GAME ENGINE LOOP ---
+        // --- 6. CORE GAME ENGINE LOOP WITH GRAVITY ---
         const clock = new THREE.Clock();
 
         function animate() {
@@ -211,29 +210,37 @@
             if (document.pointerLockElement === document.body) {
                 const delta = clock.getDelta();
 
-                // Calculate decay drag slowing down
+                // 1. Apply Horizontal Friction/Drag
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
+
+                // 2. Apply Gravity (Pulls down on the Y axis every single frame)
+                velocity.y -= 9.8 * 3.5 * delta; // 9.8 m/s^2 multiplied for arcade snappiness
 
                 direction.z = Number(moveForward) - Number(moveBackward);
                 direction.x = Number(moveRight) - Number(moveLeft);
                 direction.normalize(); 
 
-                // Move relative to where the camera is looking
                 if (moveForward || moveBackward) velocity.z -= direction.z * 40.0 * delta;
                 if (moveLeft || moveRight) velocity.x -= direction.x * 40.0 * delta;
 
+                // 3. Move Camera position based on calculated velocity forces
                 camera.translateX(-velocity.x * delta);
                 camera.translateZ(velocity.z * delta);
-                
-                // Lock height position so player walks flatly across the plane
-                camera.position.y = 1.2; 
+                camera.position.y += velocity.y * delta; // Update vertical height change
+
+                // 4. Basic Ground Collision Boundary Check
+                // If you fall below the initial base block level, snap back and allow jumping again
+                if (camera.position.y < playerHeight) {
+                    velocity.y = 0;
+                    camera.position.y = playerHeight;
+                    canJump = true;
+                }
             }
 
             renderer.render(scene, camera);
         }
 
-        // Adjust perspective if user scales window size
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
