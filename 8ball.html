@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Oracle 8-Ball</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1a1a2e;
+            color: #fff;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { color: #00f2fe; margin-bottom: 5px; }
+        .subtitle { color: #888; margin-bottom: 40px; }
+
+        /* --- THE MAGIC 8-BALL --- */
+        .oracle-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 0 auto;
+        }
+
+        #ball {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 30%, #16213e, #020208);
+            border-radius: 50%;
+            border: 4px solid #0f3460;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        /* The glowing screen inside the ball */
+        #screen {
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle, #0f3460, #0a0a16);
+            border: 3px solid #e94560;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            box-sizing: border-box;
+            box-shadow: inset 0 0 15px rgba(233, 69, 96, 0.6);
+        }
+
+        #answer {
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: #00f2fe;
+            text-shadow: 0 0 8px #00f2fe;
+            text-transform: uppercase;
+            line-height: 1.3;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        /* --- USER INPUT --- */
+        .input-section {
+            margin-top: 30px;
+        }
+        input[type="text"] {
+            background-color: #16213e;
+            border: 2px solid #0f3460;
+            color: white;
+            padding: 10px 15px;
+            font-size: 1rem;
+            border-radius: 25px;
+            width: 280px;
+            text-align: center;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            border-color: #00f2fe;
+        }
+
+        /* --- SHAKE ANIMATION --- */
+        .shake {
+            animation: shakeBall 0.5s ease-in-out;
+        }
+
+        @keyframes shakeBall {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            10% { transform: translate(-8px, 5px) rotate(-3deg); }
+            20% { transform: translate(8px, -5px) rotate(3deg); }
+            30% { transform: translate(-6px, -3px) rotate(-1deg); }
+            40% { transform: translate(6px, 4px) rotate(2deg); }
+            50% { transform: translate(-4px, 2px) rotate(-2deg); }
+            60% { transform: translate(4px, -2px) rotate(1deg); }
+            70% { transform: translate(-2px, 1px) rotate(0deg); }
+            80% { transform: translate(2px, 1px) rotate(0deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        .home-btn {
+            background-color: transparent;
+            color: #888;
+            border: 1px solid #444;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 40px;
+        }
+        .home-btn:hover { color: #fff; border-color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h1>🔮 Cybernetic Oracle 🔮</h1>
+    <p class="subtitle">Ask a yes/no question and boot up the prediction matrix.</p>
+
+    <div class="oracle-container">
+        <div id="ball" onclick="askOracle()">
+            <div id="screen">
+                <div id="answer">8</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-section">
+        <input type="text" id="question-input" placeholder="Type your question here...">
+    </div>
+
+    <button class="home-btn" onclick="window.location.href='index.html'">Back to Arcade</button>
+
+    <script>
+        const responses = [
+            // Positive
+            "Data points to YES",
+            "Matrix confirms it",
+            "Without a doubt",
+            "Highly probable",
+            "Systems sync: YES",
+            // Neutral
+            "Signal blurry, retry",
+            "Buffer overload, ask later",
+            "Cannot compute now",
+            "Query unreadable",
+            // Negative
+            "Data says NO",
+            "Mainframe rejects it",
+            "Highly unlikely",
+            "Outlook corrupted",
+            "Sources say NO"
+        ];
+
+        function askOracle() {
+            const ball = document.getElementById("ball");
+            const answerText = document.getElementById("answer");
+            const input = document.getElementById("question-input");
+
+            // Don't do anything if it's already shaking
+            if (ball.classList.contains("shake")) return;
+
+            // Optional check: Did they actually type something?
+            if (input.value.trim() === "") {
+                answerText.innerText = "Ask a query first";
+                return;
+            }
+
+            // 1. Hide the old answer text slightly
+            answerText.style.opacity = 0;
+
+            // 2. Trigger CSS Shake Animation
+            ball.classList.add("shake");
+
+            // 3. Wait for the shake to finish (500ms), then change the text
+            setTimeout(() => {
+                const randomIndex = Math.floor(Math.random() * responses.length);
+                answerText.innerText = responses[randomIndex];
+                answerText.style.opacity = 1;
+                
+                // Remove class so it can be shaken again next time
+                ball.classList.remove("shake");
+                
+                // Clear the input bar for convenience
+                input.value = "";
+            }, 500);
+        }
+    </script>
+</body>
+</html>
