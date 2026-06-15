@@ -117,30 +117,56 @@
         let selectedSquare = null;
 
         // Hardcoded, curated Grandmaster Tactics database
+       // Hardcoded, curated Grandmaster Tactics database
         const localPuzzleDatabase = [
             {
-                rating: 1620,
-                // Back Rank Checkmate tactic
+                rating: 1420,
+                title: "Back Rank Checkmate",
                 fen: "6k1/5ppp/8/8/8/8/4QPPP/6K1 w - - 0 1",
-                lines: ["e2e8"] // Player checkmates immediately
+                lines: ["e2e8"]
             },
             {
-                rating: 1580,
-                // Knight Fork Winning a Queen
+                rating: 1550,
+                title: "The Royal Fork",
                 fen: "r3k2r/ppp2ppp/2n5/1B1p4/3P2P1/4q3/PPPNb2P/R2QK2R w KQkq - 0 1",
                 lines: ["d1e2", "e3e2", "k1e2"] 
             },
             {
-                rating: 1710,
-                // Free Hanging Bishop Tactic
+                rating: 1480,
+                title: "Free Hanging Piece",
                 fen: "r1bqk2r/pppp1ppp/2n2n2/4p3/1bB1P3/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 4",
                 lines: ["b4c3", "b2c3"]
             },
             {
-                rating: 1650,
-                // Smothered tactical threat opening
+                rating: 1610,
+                title: "Smothered Knight Threat",
                 fen: "r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4",
                 lines: ["f3e5", "c6e5", "d2d4"]
+            },
+            {
+                rating: 1520,
+                title: "Queen Skewer",
+                fen: "4k3/8/8/8/8/8/3q4/3K1R2 w - - 0 1",
+                lines: ["d1d2"]
+            },
+            {
+                rating: 1680,
+                title: "Anastasias Mate Pattern",
+                fen: "m6k/5ppp/8/8/8/8/5PPP/6K1 w - - 0 1",
+                fen: "5rk1/5ppp/8/8/8/8/4QPPP/5RK1 w - - 0 1",
+                lines: ["e2e7"]
+            },
+            {
+                rating: 1730,
+                title: "Deflection Tactics",
+                fen: "2r3k1/5ppp/8/8/8/8/3QPPPP/2R3K1 w - - 0 1",
+                lines: ["c1c8"]
+            },
+            {
+                rating: 1590,
+                title: "Absolute Pin Win",
+                fen: "4k3/4r3/8/8/8/4R3/4Q3/4K3 w - - 0 1",
+                lines: ["e3e7", "e8f8", "e7e8"]
             }
         ];
 
