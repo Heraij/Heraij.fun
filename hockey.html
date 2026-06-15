@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber-Grid Air Hockey</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1a1a2e;
+            color: #fff;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        h1 { color: #00f2fe; margin-bottom: 5px; }
+        #score { font-size: 1.5rem; font-weight: bold; margin-bottom: 15px; color: #e94560; }
+        
+        #gameCanvas {
+            background-color: #16213e;
+            border: 4px solid #0f3460;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+            cursor: none; /* Hide cursor to make the mallet feel natural */
+            display: block;
+            margin: 0 auto;
+        }
+
+        .home-btn {
+            background-color: transparent;
+            color: #888;
+            border: 1px solid #444;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 25px;
+        }
+        .home-btn:hover { color: #fff; border-color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h1>🥏 Cyber Hockey 🥏</h1>
+    <div id="score">Player: 0 | CPU: 0</div>
+
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <br>
+    <button class="home-btn" onclick="window.location.href='index.html'">Back to Arcade</button>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreDisplay = document.getElementById("score");
+
+        let playerScore = 0;
+        let cpuScore = 0;
+
+        // Table configuration
+        const goalWidth = 120;
+
+        // Puck settings
+        let puck = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 12,
+            vx: 0,
+            vy: 0,
+            maxSpeed: 10
+        };
+
+        // Player Mallet (Controlled by Mouse)
+        let player = {
+            x: canvas.width / 2,
+            y: canvas.height - 80,
+            radius: 20
+        };
+
+        // CPU Mallet (Controlled by Simple AI)
+        let cpu = {
+            x: canvas.width / 2,
+            y: 80,
+            radius: 20,
+            speed: 3.5
+        };
+
+        // Track Mouse Movement
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            player.x = e.clientX - rect.left;
+            player.y = e.clientY - rect.top;
+
+            // Keep player mallet completely inside their own bottom half of the grid
+            if (player.x < player.radius) player.x = player.radius;
+            if (player.x > canvas.width - player.radius) player.x = canvas.width - player.radius;
+            if (player.y < canvas.height / 2 + player.radius) player.y = canvas.height / 2 + player.radius;
+            if (player.y > canvas.height - player.radius) player.y = canvas.height - player.radius;
+        });
+
+        // Reset positions after a goal
+        function resetTable(winner) {
+            puck.x = canvas.width / 2;
+            puck.y = canvas.height / 2;
+            puck.vx = 0;
+            puck.vy = 0;
+            
+            cpu.x = canvas.width / 2;
+            cpu.y = 80;
+        }
+
+        // Handle collision circle math physics
+        function handleCollision(mallet) {
+            let dx = puck.x - mallet.x;
+            let dy = puck.y - mallet.y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < puck.radius + mallet.radius) {
+                // Find angle of collision bounce
+                let angle = Math.atan2(dy, dx);
+                
+                // Push the puck out of the mallet so they don't stick together
+                puck.x = mallet.x + (mallet.radius + puck.radius) * Math.cos(angle);
+                puck.y = mallet.y + (mallet.radius + puck.radius) * Math.sin(angle);
+
+                // Transfer velocity dynamically + add an aggressive kick boost
+                puck.vx = Math.cos(angle) * 7;
+                puck.vy = Math.sin(angle) * 7;
+            }
+        }
+
+        function update() {
+            // 1. Move the Puck
+            puck.x += puck.vx;
+            puck.y += puck.vy;
+
+            // Apply slight ambient friction deceleration
+            puck.vx *= 0.99;
+            puck.vy *= 0.99;
+
+            // 2. Simple AI Tracking Logic
+            // The computer tracks the puck only if it's on its own side of the board
+            if (puck.y < canvas.height / 2) {
+                if (cpu.x < puck.x - 5) cpu.x += cpu.speed;
+                else if (cpu.x > puck.x + 5) cpu.x -= cpu.speed;
+
+                if (cpu.y < puck.y - 20) cpu.y += cpu.speed;
+                else if (cpu.y > 80) cpu.y -= cpu.speed;
+            } else {
+                // Move back to a home defensive stance
+                if (cpu.x < canvas.width / 2 - 5) cpu.x += cpu.speed;
+                else if (cpu.x > canvas.width / 2 + 5) cpu.x -= cpu.speed;
+                if (cpu.y > 80) cpu.y -= cpu.speed;
+            }
+
+            // Keep CPU mallet restricted to its top half zone boundary
+            if (cpu.x < cpu.radius) cpu.x = cpu.radius;
+            if (cpu.x > canvas.width - cpu.radius) cpu.x = canvas.width - cpu.radius;
+            if (cpu.y < cpu.radius) cpu.y = cpu.radius;
+            if (cpu.y > canvas.height / 2 - cpu.radius) cpu.y = canvas.height / 2 - cpu.radius;
+
+            // 3. Process Mallet Collisions
+            handleCollision(player);
+            handleCollision(cpu);
+
+            // 4. Wall and Goal Calculations
+            // Left & Right Wall Bounce
+            if (puck.x - puck.radius < 0) {
+                puck.x = puck.radius;
+                puck.vx = -puck.vx;
+            }
+            if (puck.x + puck.radius > canvas.width) {
+                puck.x = canvas.width - puck.radius;
+                puck.vx = -puck.vx;
+            }
+
+            // Top Goal Check vs Top Wall Bounce
+            if (puck.y - puck.radius < 0) {
+                if (puck.x > (canvas.width - goalWidth) / 2 && puck.x < (canvas.width + goalWidth) / 2) {
+                    playerScore++;
+                    scoreDisplay.innerText = `Player: ${playerScore} | CPU: ${cpuScore}`;
+                    resetTable("player");
+                } else {
+                    puck.y = puck.radius;
+                    puck.vy = -puck.vy;
+                }
+            }
+
+            // Bottom Goal Check vs Bottom Wall Bounce
+            if (puck.y + puck.radius > canvas.height) {
+                if (puck.x > (canvas.width - goalWidth) / 2 && puck.x < (canvas.width + goalWidth) / 2) {
+                    cpuScore++;
+                    scoreDisplay.innerText = `Player: ${playerScore} | CPU: ${cpuScore}`;
+                    resetTable("cpu");
+                } else {
+                    puck.y = canvas.height - puck.radius;
+                    puck.vy = -puck.vy;
+                }
+            }
+        }
+
+        function draw() {
+            // Clear Screen Frame Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Center Dividing Line
+            ctx.strokeStyle = "rgba(0, 242, 254, 0.2)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+
+            // Draw Center Circle Line Overlay
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 60, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Draw Goals Lines
+            ctx.strokeStyle = "#e94560";
+            ctx.lineWidth = 6;
+            // Top Goal
+            ctx.beginPath();
+            ctx.moveTo((canvas.width - goalWidth) / 2, 2);
+            ctx.lineTo((canvas.width + goalWidth) / 2, 2);
+            ctx.stroke();
+            // Bottom Goal
+            ctx.beginPath();
+            ctx.moveTo((canvas.width - goalWidth) / 2, canvas.height - 2);
+            ctx.lineTo((canvas.width + goalWidth) / 2, canvas.height - 2);
+            ctx.stroke();
+
+            // Draw Player Mallet (Neon Blue Matrix Glow)
+            ctx.fillStyle = "#00f2fe";
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = "#00f2fe";
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw CPU Mallet (Neon Red Matrix Glow)
+            ctx.fillStyle = "#e94560";
+            ctx.shadowColor = "#e94560";
+            ctx.beginPath();
+            ctx.arc(cpu.x, cpu.y, cpu.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw the Puck (Neon Yellow Matrix Glow)
+            ctx.fillStyle = "#ffff00";
+            ctx.shadowColor = "#ffff00";
+            ctx.beginPath();
+            ctx.arc(puck.x, puck.y, puck.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Reset glow values so lines aren't blurry
+            ctx.shadowBlur = 0;
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Fire engine loop execution
+        gameLoop();
+    </script>
+</body>
+</html>
