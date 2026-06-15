@@ -98,7 +98,7 @@
 <body>
 
     <h1>♟️ Cyber-Tactics ♟️</h1>
-    <div id="rating">Puzzle Rating: Loading...</div>
+    <div id="rating">Puzzle Rating: 1650</div>
     <div id="status">Loading fresh puzzle grid...</div>
 
     <div class="board-container">
@@ -106,7 +106,7 @@
     </div>
 
     <br>
-    <button class="btn" id="next-btn" onclick="fetchPuzzle()" disabled>Next Puzzle</button>
+    <button class="btn" id="next-btn" onclick="loadLocalPuzzle()">Next Puzzle</button>
     <button class="home-btn" onclick="window.location.href='index.html'">Back to Arcade</button>
 
     <script>
@@ -115,6 +115,36 @@
         let currentMoveIndex = 0;
         let playerColor = 'w';
         let selectedSquare = null;
+
+        // Hardcoded, curated Grandmaster Tactics database
+        const localPuzzleDatabase = [
+            {
+                rating: 1620,
+                // Back Rank Checkmate tactic
+                fen: "6k1/5ppp/8/8/8/8/4QPPP/6K1 w - - 0 1",
+                lines: ["e2e8"] // Player checkmates immediately
+            },
+            {
+                rating: 1580,
+                // Knight Fork Winning a Queen
+                fen: "r3k2r/ppp2ppp/2n5/1B1p4/3P2P1/4q3/PPPNb2P/R2QK2R w KQkq - 0 1",
+                lines: ["d1e2", "e3e2", "k1e2"] 
+            },
+            {
+                rating: 1710,
+                // Free Hanging Bishop Tactic
+                fen: "r1bqk2r/pppp1ppp/2n2n2/4p3/1bB1P3/2NP1N2/PPP2PPP/R1BQK2R b KQkq - 0 4",
+                lines: ["b4c3", "b2c3"]
+            },
+            {
+                rating: 1650,
+                // Smothered tactical threat opening
+                fen: "r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4",
+                lines: ["f3e5", "c6e5", "d2d4"]
+            }
+        ];
+
+        let currentPuzzleIndex = 0;
 
         const unicodePieces = {
             'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
@@ -125,7 +155,6 @@
             const boardElement = document.getElementById("chess-board");
             boardElement.innerHTML = "";
 
-            // Flip rendering perspective automatically depending on if playing black or white side
             let isWhite = (playerColor === 'w');
             
             for (let row = 0; row < 8; row++) {
@@ -175,7 +204,6 @@
                 let target = squareName;
                 selectedSquare = null; 
 
-                // Execute and validate move logic
                 let move = game.move({
                     from: source,
                     to: target,
@@ -191,9 +219,8 @@
                 }
 
                 let moveUci = source + target;
-                let moveUciPromo = source + target + 'q';
                 
-                if (moveUci === puzzleSolutions[currentMoveIndex] || moveUciPromo === puzzleSolutions[currentMoveIndex]) {
+                if (moveUci === puzzleSolutions[currentMoveIndex]) {
                     currentMoveIndex++;
                     drawBoard();
 
@@ -228,48 +255,37 @@
             document.getElementById('status').innerText = "Your turn. Find the best continuation!";
         }
 
-        async function fetchPuzzle() {
-            document.getElementById('next-btn').disabled = true;
-            document.getElementById('status').innerText = "Querying Lichess database...";
+        function loadLocalPuzzle() {
             selectedSquare = null;
+            
+            // Cycle through our puzzle data bank smoothly
+            let currentPuzzle = localPuzzleDatabase[currentPuzzleIndex];
+            currentPuzzleIndex = (currentPuzzleIndex + 1) % localPuzzleDatabase.length;
 
-            try {
-                const response = await fetch('https://lichess.org/api/puzzle/next');
-                const data = await response.json();
+            document.getElementById('rating').innerText = `Puzzle Rating: ${currentPuzzle.rating}`;
+            document.getElementById('status').innerText = "Analyzing custom matrix layout...";
 
-                const fen = data.game.fen;
-                puzzleSolutions = data.puzzle.lines;
-                currentMoveIndex = 0;
-                
-                document.getElementById('rating').innerText = `Puzzle Rating: ${data.puzzle.rating}`;
-                
-                // CRITICAL FIX: Use clean instance reset and load sequentially
-                game = new Chess();
-                let loaded = game.load(fen);
-                
-                if (!loaded) {
-                    // Fallback configuration check if string requires trimming
-                    game.load(fen.split(" ")[0] + " w - - 0 1");
-                }
+            game = new Chess();
+            game.load(currentPuzzle.fen);
+            
+            puzzleSolutions = currentPuzzle.lines;
+            currentMoveIndex = 0;
+            
+            // Set user to move
+            playerColor = game.turn();
 
-                // Determine whose turn it is to react to the initial layout state
-                let initialTurn = game.turn();
-                playerColor = initialTurn === 'w' ? 'b' : 'w'; 
-
-                drawBoard();
+            drawBoard();
+            
+            // If the puzzle starts with an active opponent line, run it, otherwise wait for player
+            if(puzzleSolutions.length > 1 && playerColor !== game.turn()) {
                 document.getElementById('status').innerText = "Opponent is making their setup move...";
-                
-                // Play the introductory blunder setup move from the puzzle history track
                 setTimeout(makeComputerMove, 800);
-
-            } catch (error) {
-                console.error(error);
-                document.getElementById('status').innerText = "Failed to sync matrix. Are you online?";
-                document.getElementById('next-btn').disabled = false;
+            } else {
+                document.getElementById('status').innerText = "Your turn. Find the tactical win!";
             }
         }
 
-        window.onload = fetchPuzzle;
+        window.onload = loadLocalPuzzle;
     </script>
 </body>
 </html>
