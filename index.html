@@ -164,6 +164,11 @@
     <p>Tap into a highly volatile plasma engine. Buy grid sub-routines and stabilize anomalies for huge bonuses!</p>
     <div class="play-btn">Play Now</div>
 </div>
+                <div class="game-card" onclick="window.location.href='8ball.html'">
+    <h2>🔮 Cyber Oracle</h2>
+    <p>Consult the digital mainframe. Ask any question to decrypt the secrets of the future!</p>
+    <div class="play-btn">Consult Matrix</div>
+</div>
 
             </div>
         </div>
@@ -171,16 +176,16 @@
         <button class="nav-btn next-btn" onclick="moveSlide(1)">❯</button>
     </div>
 
-    <div class="dots-container">
-        <div class="dot active" onclick="currentSlide(0)"></div>
-        <div class="dot" onclick="currentSlide(1)"></div>
-    </div>
+<div class="dots-container">
+    <div class="dot active" onclick="currentSlide(0)"></div>
+    <div class="dot" onclick="currentSlide(1)"></div>
+    <div class="dot" onclick="currentSlide(2)"></div> </div>
 
     <script>
         const track = document.getElementById('track');
         const dots = document.querySelectorAll('.dot');
         let currentIndex = 0;
-        const totalSlides = 2; // Update this number if you add more games!
+        const totalSlides = 3; // Update this number if you add more games!
 
         function updateCarousel() {
             // Shift the track left based on the current index
