@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber-Tactics Chess Puzzles</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1a1a2e;
+            color: #fff;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { color: #00f2fe; margin-bottom: 5px; }
+        #status { font-size: 1.2rem; color: #e94560; margin-bottom: 20px; min-height: 1.5em; }
+        #rating { color: #888; margin-bottom: 15px; font-weight: bold; }
+
+        /* --- THE BOARD WRAPPER --- */
+        #myBoard {
+            width: 360px;
+            margin: 0 auto;
+            border: 4px solid #0f3460;
+            border-radius: 5px;
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+        }
+
+        /* Tweak chessboard.js white/black square colors to fit dark theme */
+        .white-1e1d7 { background-color: #e2e4e6; color: #1a1a2e; }
+        .black-b7a1a { background-color: #889cac; color: #fff; }
+
+        .btn {
+            background-color: #e94560;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 25px;
+            margin-right: 10px;
+        }
+        .btn:hover { background-color: #ff527b; }
+        .btn:disabled { background-color: #555; cursor: not-allowed; }
+
+        .home-btn {
+            background-color: transparent;
+            color: #888;
+            border: 1px solid #444;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 40px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .home-btn:hover { color: #fff; border-color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h1>♟️ Cyber-Tactics ♟️</h1>
+    <div id="rating">Puzzle Rating: Loading...</div>
+    <div id="status">Loading fresh puzzle grid...</div>
+
+    <div id="myBoard"></div>
+
+    <button class="btn" id="next-btn" onclick="fetchPuzzle()" disabled>Next Puzzle</button>
+    <button class="home-btn" onclick="window.location.href='index.html'">Back to Arcade</button>
+
+    <script>
+        let board = null;
+        let game = new Chess();
+        let puzzleSolutions = [];
+        let currentMoveIndex = 0;
+        let playerColor = 'w';
+
+        function onDragStart(source, piece, position, orientation) {
+            // Do not pick up pieces if the puzzle is over
+            if (currentMoveIndex >= puzzleSolutions.length) return false;
+
+            // Only let the player move their own assigned color side
+            if ((playerColor === 'w' && piece.search(/^b/) !== -1) ||
+                (playerColor === 'b' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+        }
+
+        function onDrop(source, target) {
+            // Check if the move is legal according to chess rules
+            let move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q' // Automatically promote pawns to a queen for simplicity
+            });
+
+            // If illegal move, snap the piece back
+            if (move === null) return 'snapback';
+
+            // Convert player move to standard UCI format (e.g., "e2e4") to check against solution
+            let moveUci = source + target;
+            
+            // Check if it matches the puzzle master sequence
+            if (moveUci === puzzleSolutions[currentMoveIndex]) {
+                currentMoveIndex++;
+                
+                // If puzzle has more moves, make the computer respond instantly
+                if (currentMoveIndex < puzzleSolutions.length) {
+                    document.getElementById('status').innerText = "Correct! Mainframe defending...";
+                    setTimeout(makeComputerMove, 600);
+                } else {
+                    document.getElementById('status').innerText = "🎉 Puzzle Solved! Matrix Overridden.";
+                    document.getElementById('next-btn').disabled = false;
+                }
+            } else {
+                document.getElementById('status').innerText = "❌ Incorrect Line! Reverting grid...";
+                setTimeout(() => {
+                    game.undo();
+                    board.position(game.fen());
+                }, 800);
+            }
+        }
+
+        function makeComputerMove() {
+            let compMove = puzzleSolutions[currentMoveIndex];
+            let from = compMove.substring(0, 2);
+            let to = compMove.substring(2, 4);
+
+            game.move({ from: from, to: to, promotion: 'q' });
+            board.position(game.fen());
+            
+            currentMoveIndex++;
+            document.getElementById('status').innerText = "Your turn. Find the best continuation!";
+        }
+
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+
+        async function fetchPuzzle() {
+            document.getElementById('next-btn').disabled = true;
+            document.getElementById('status').innerText = "Querying Lichess database...";
+            document.getElementById('rating').innerText = "Puzzle Rating: Loading...";
+
+            try {
+                // Fetch a random public puzzle from Lichess API
+                const response = await fetch('https://lichess.org/api/puzzle/next');
+                const data = await response.json();
+
+                // Setup the puzzle state
+                const fen = data.game.fen;
+                puzzleSolutions = data.puzzle.lines;
+                currentMoveIndex = 0;
+                
+                document.getElementById('rating').innerText = `Puzzle Rating: ${data.puzzle.rating}`;
+                
+                game = new Chess(fen);
+                
+                // Determine player color based on who moves next in the puzzle sequence
+                playerColor = game.turn(); 
+
+                // Initialize or refresh visual board configuration
+                const config = {
+                    draggable: true,
+                    position: fen,
+                    orientation: playerColor === 'w' ? 'white' : 'black',
+                    onDragStart: onDragStart,
+                    onDrop: onDrop,
+                    onSnapEnd: onSnapEnd
+                };
+                
+                board = Chessboard('myBoard', config);
+
+                // Play the opponent's initial setup move before player takes control
+                document.getElementById('status').innerText = "Opponent just played. Counter it!";
+                setTimeout(makeComputerMove, 600);
+
+            } catch (error) {
+                document.getElementById('status').innerText = "Failed to sync matrix. Are you online?";
+                document.getElementById('next-btn').disabled = false;
+            }
+        }
+
+        // Initialize the first puzzle configuration on startup
+        $(document).ready(fetchPuzzle);
+    </script>
+</body>
+</html>
