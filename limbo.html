@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Arcade - Limbo Keys</title>
+    <style>
+        body {
+            background-color: #0b0c10;
+            color: #c5c6c7;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        h1 {
+            color: #1f2833;
+            text-shadow: 0 0 10px #00f2fe, 0 0 20px #00f2fe;
+            margin-bottom: 5px;
+            font-size: 2.5rem;
+        }
+
+        #status-prompt {
+            font-size: 1.2rem;
+            color: #e94560;
+            margin-bottom: 30px;
+            height: 25px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* The Grid Arena Area */
+        #arena {
+            position: relative;
+            width: 600px;
+            height: 220px;
+            background: rgba(31, 40, 51, 0.2);
+            border: 2px solid #1f2833;
+            box-shadow: inset 0 0 20px rgba(0, 242, 254, 0.1);
+            border-radius: 8px;
+            margin-bottom: 40px;
+        }
+
+        .key-element {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease-in-out, filter 0.2s;
+            cursor: pointer;
+            user-select: none;
+            filter: drop-shadow(0 0 8px #ff6b6b);
+        }
+
+        /* Setup Panels & Interface Controls */
+        .controls-panel {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #11141a;
+            border: 2px solid #00f2fe;
+            color: #00f2fe;
+            padding: 10px 20px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #00f2fe;
+            color: #0b0c10;
+            box-shadow: 0 0 15px #00f2fe;
+        }
+
+        button:disabled {
+            border-color: #1f2833;
+            color: #1f2833;
+            cursor: not-allowed;
+        }
+
+        select {
+            background: #11141a;
+            border: 2px solid #e94560;
+            color: #e94560;
+            padding: 10px;
+            font-family: inherit;
+            font-weight: bold;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        #arcade-exit-btn {
+            border-color: #555;
+            color: #888;
+            margin-top: 10px;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🔑 CYBER-LIMBO 🔑</h1>
+    <div id="status-prompt">Select Difficulty & Initialise System</div>
+
+    <div class="controls-panel">
+        <select id="difficulty-select">
+            <option value="easy">DIFFICULTY: NOVICE (4 Shuffles)</option>
+            <option value="medium" selected>DIFFICULTY: FOCUS (10 Shuffles)</option>
+            <option value="hard">DIFFICULTY: MINDCAP (18 Shuffles)</option>
+            <option value="limbo">DIFFICULTY: UNHINGED (28 Shuffles)</option>
+        </select>
+        <button id="start-btn" onclick="initializeLimboGame()">RUN MATRIX</button>
+    </div>
+
+    <div id="arena">
+        </div>
+
+    <a href="index.html" id="arcade-exit-btn">← TERMINATE SUITE</a>
+
+    <script>
+        const arena = document.getElementById('arena');
+        const statusPrompt = document.getElementById('status-prompt');
+        const startBtn = document.getElementById('start-btn');
+        const diffSelect = document.getElementById('difficulty-select');
+
+        const totalKeys = 8;
+        let keysArray = [];
+        let slotsMapping = []; // Tracks which key index occupies which physical visual coordinate slot
+        
+        let correctKeyId = 0; 
+        let currentShuffleCount = 0;
+        let maxTotalShuffles = 10;
+        let shuffleSpeedDuration = 250;
+
+        // Distinct custom neon profile palettes for the final identification wheel phase
+        const endColors = [
+            '#ff0055', '#00ff66', '#00f2fe', '#ffff00', 
+            '#ff00ff', '#ff6600', '#9900ff', '#ffffff'
+        ];
+
+        // Set static X grid slots to align keys flawlessly inside the block frame boundaries
+        const slotXPositions = [25, 95, 165, 235, 305, 375, 445, 515];
+        const defaultY = 85; 
+
+        class VirtualKey {
+            constructor(id, initialSlot) {
+                this.id = id;
+                this.currentSlot = initialSlot;
+                
+                this.domElement = document.createElement('div');
+                this.domElement.className = 'key-element';
+                this.domElement.innerText = '🔑';
+                this.domElement.style.top = `${defaultY}px`;
+                
+                this.updateDOMPosition(false);
+                arena.appendChild(this.domElement);
+            }
+
+            updateDOMPosition(animate = true) {
+                if (!animate) {
+                    this.domElement.style.transition = 'none';
+                } else {
+                    this.domElement.style.transition = `transform ${shuffleSpeedDuration}ms ease-in-out`;
+                }
+                
+                const targetX = slotXPositions[this.currentSlot];
+                this.domElement.style.transform = `translate3d(${targetX}px, 0, 0)`;
+            }
+
+            setGlowColor(colorHex, intense = true) {
+                this.domElement.style.filter = intense ? `drop-shadow(0 0 12px ${colorHex}) saturate(2)` : 'none';
+            }
+        }
+
+        function createCleanGridEnvironment() {
+            arena.innerHTML = '';
+            keysArray = [];
+            slotsMapping = [];
+
+            for (let i = 0; i < totalKeys; i++) {
+                const keyObject = new VirtualKey(i, i);
+                keysArray.push(keyObject);
+                slotsMapping.push(i); // Slot i contains Key i initially
+                keyObject.setGlowColor('#ffaa00', true); // Default Orange state
+            }
+        }
+
+        function initializeLimboGame() {
+            // Lock UI config dropdown choices mid-run execution loop
+            startBtn.disabled = true;
+            diffSelect.disabled = true;
+            
+            createCleanGridEnvironment();
+
+            // Establish parameters configuration matrices derived from difficulty modes
+            const diff = diffSelect.value;
+            if (diff === 'easy') { maxTotalShuffles = 5; shuffleSpeedDuration = 400; }
+            else if (diff === 'medium') { maxTotalShuffles = 12; shuffleSpeedDuration = 260; }
+            else if (diff === 'hard') { maxTotalShuffles = 22; shuffleSpeedDuration = 170; }
+            else if (diff === 'limbo') { maxTotalShuffles = 35; shuffleSpeedDuration = 110; }
+
+            // Step 1: Select the winning target key randomly and flash it green
+            correctKeyId = Math.floor(Math.random() * totalKeys);
+            statusPrompt.innerText = "FOCUS. TARGET IDENTIFIED...";
+            statusPrompt.style.color = '#00ff66';
+
+            keysArray[correctKeyId].setGlowColor('#00ff66', true);
+
+            // Give player a brief window to capture the key identity target index profile
+            setTimeout(() => {
+                // Neutralize target back into matching generic orange row arrays
+                keysArray.forEach(k => k.setGlowColor('#ffaa00', true));
+                statusPrompt.innerText = "INITIATING SHUFFLE MATRIX...";
+                statusPrompt.style.color = '#ffaa00';
+                
+                currentShuffleCount = 0;
+                setTimeout(executeShuffleIteration, 600);
+            }, 1200);
+        }
+
+        function executeShuffleIteration() {
+            if (currentShuffleCount >= maxTotalShuffles) {
+                concludeShuffleSequence();
+                return;
+            }
+
+            // Generate two completely unique random slots indices to swap layouts
+            let slotA = Math.floor(Math.random() * totalKeys);
+            let slotB = Math.floor(Math.random() * totalKeys);
+            while (slotA === slotB) {
+                slotB = Math.floor(Math.random() * totalKeys);
+            }
+
+            // Extract real objects tracking pointers from the index registers map arrays
+            const keyA = keysArray[slotsMapping[slotA]];
+            const keyB = keysArray[slotsMapping[slotB]];
+
+            // Swap indices inside memory allocation registry maps
+            const tempIndex = slotsMapping[slotA];
+            slotsMapping[slotA] = slotsMapping[slotB];
+            slotsMapping[slotB] = tempIndex;
+
+            // Reflect state structural revisions onto slot trackers inside elements
+            keyA.currentSlot = slotB;
+            keyB.currentSlot = slotA;
+
+            // Animate mechanical movement
+            keyA.updateDOMPosition(true);
+            keyB.updateDOMPosition(true);
+
+            currentShuffleCount++;
+            setTimeout(executeShuffleIteration, shuffleSpeedDuration + 20);
+        }
+
+        function concludeShuffleSequence() {
+            statusPrompt.innerText = "CHOOSE THE TARGET METADATA KEY";
+            statusPrompt.style.color = '#00f2fe';
+
+            // Generate a random shift assignment layout array for distinct unique end color tags
+            let shuffledColors = [...endColors].sort(() => Math.random() - 0.5);
+
+            // Assign unique brilliant colors across all active keys
+            for (let i = 0; i < totalKeys; i++) {
+                const assignedColor = shuffledColors[i];
+                keysArray[i].setGlowColor(assignedColor, true);
+                keysArray[i].domElement.style.cursor = 'pointer';
+                
+                // Bind clicking check functions onto live targets elements
+                keysArray[i].domElement.onclick = () => verifyPlayerChoice(keysArray[i].id);
+            }
+        }
+
+        function verifyPlayerChoice(chosenId) {
+            // Disengage item handlers pointers to avoid multiple overlapping submissions evaluations
+            keysArray.forEach(k => k.domElement.onclick = null);
+
+            if (chosenId === correctKeyId) {
+                statusPrompt.innerText = "🎉 CORRECT! PROTOCOL UNLOCKED.";
+                statusPrompt.style.color = '#00ff66';
+                document.body.style.background = '#0a2315';
+            } else {
+                statusPrompt.innerText = "❌ FAILED. DATA PURGED.";
+                statusPrompt.style.color = '#e94560';
+                document.body.style.background = '#2b0c13';
+                
+                // Explicitly highlight the correct key index that got away
+                keysArray[correctKeyId].domElement.style.transform += ' scale(1.3)';
+            }
+
+            // Restore engine terminal operation selectors
+            setTimeout(() => {
+                document.body.style.background = '#0b0c10';
+                statusPrompt.innerText = "Select Difficulty & Initialise System";
+                statusPrompt.style.color = '#e94560';
+                startBtn.disabled = false;
+                diffSelect.disabled = false;
+                createCleanGridEnvironment();
+            }, 3000);
+        }
+
+        // Run primary fallback frame setups layout on first boot cycles load
+        createCleanGridEnvironment();
+    </script>
+</body>
+</html>
