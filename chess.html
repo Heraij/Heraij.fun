@@ -84,10 +84,7 @@
         let playerColor = 'w';
 
         function onDragStart(source, piece, position, orientation) {
-            // Do not pick up pieces if the puzzle is over
             if (currentMoveIndex >= puzzleSolutions.length) return false;
-
-            // Only let the player move their own assigned color side
             if ((playerColor === 'w' && piece.search(/^b/) !== -1) ||
                 (playerColor === 'b' && piece.search(/^w/) !== -1)) {
                 return false;
@@ -95,24 +92,19 @@
         }
 
         function onDrop(source, target) {
-            // Check if the move is legal according to chess rules
             let move = game.move({
                 from: source,
                 to: target,
-                promotion: 'q' // Automatically promote pawns to a queen for simplicity
+                promotion: 'q'
             });
 
-            // If illegal move, snap the piece back
             if (move === null) return 'snapback';
 
-            // Convert player move to standard UCI format (e.g., "e2e4") to check against solution
             let moveUci = source + target;
             
-            // Check if it matches the puzzle master sequence
             if (moveUci === puzzleSolutions[currentMoveIndex]) {
                 currentMoveIndex++;
                 
-                // If puzzle has more moves, make the computer respond instantly
                 if (currentMoveIndex < puzzleSolutions.length) {
                     document.getElementById('status').innerText = "Correct! Mainframe defending...";
                     setTimeout(makeComputerMove, 600);
@@ -151,11 +143,9 @@
             document.getElementById('rating').innerText = "Puzzle Rating: Loading...";
 
             try {
-                // Fetch a random public puzzle from Lichess API
                 const response = await fetch('https://lichess.org/api/puzzle/next');
                 const data = await response.json();
 
-                // Setup the puzzle state
                 const fen = data.game.fen;
                 puzzleSolutions = data.puzzle.lines;
                 currentMoveIndex = 0;
@@ -163,37 +153,34 @@
                 document.getElementById('rating').innerText = `Puzzle Rating: ${data.puzzle.rating}`;
                 
                 game = new Chess(fen);
-                
-                // Determine player color based on who moves next in the puzzle sequence
                 playerColor = game.turn(); 
 
-                // Initialize or refresh visual board configuration
-            // Initialize or refresh visual board configuration
-const config = {
-    pieceTheme: 'https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/img/chesspieces/wikipedia/{piece}.png',
-    draggable: true,
-    position: fen,
-    orientation: playerColor === 'w' ? 'white' : 'black',
-    onDragStart: onDragStart,
-    onDrop: onDrop,
-    onSnapEnd: onSnapEnd
-};
-
-board = Chessboard('myBoard', config);
+                // --- FOOLPROOF IMAGE AND CONFIG RE-WRITE ---
+                const config = {
+                    draggable: true,
+                    position: fen,
+                    orientation: playerColor === 'w' ? 'white' : 'black',
+                    onDragStart: onDragStart,
+                    onDrop: onDrop,
+                    onSnapEnd: onSnapEnd,
+                    // Replaced with an ultra-reliable, universally accepted wiki layout
+                    pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+                };
                 
-            
+                // Clear out any old board traces to prevent rendering ghosts
+                $('#myBoard').empty();
+                board = Chessboard('myBoard', config);
 
-                // Play the opponent's initial setup move before player takes control
                 document.getElementById('status').innerText = "Opponent just played. Counter it!";
                 setTimeout(makeComputerMove, 600);
 
             } catch (error) {
+                console.error(error);
                 document.getElementById('status').innerText = "Failed to sync matrix. Are you online?";
                 document.getElementById('next-btn').disabled = false;
             }
         }
 
-        // Initialize the first puzzle configuration on startup
         $(document).ready(fetchPuzzle);
     </script>
 </body>
