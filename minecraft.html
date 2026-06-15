@@ -176,11 +176,22 @@
             document.body.requestPointerLock();
         });
 
+  // Tracking camera rotations via manual Euler angles to prevent disorientation
+        let pitch = 0; // Up/Down tracking
+        let yaw = 0;   // Left/Right tracking
+
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.body) {
-                camera.rotation.y -= e.movementX * 0.002;
-                camera.rotation.x -= e.movementY * 0.002;
-                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+                // 1. Calculate rotation steps based on mouse delta vectors
+                yaw -= e.movementX * 0.002;
+                pitch -= e.movementY * 0.002;
+
+                // 2. Firmly clamp look limits so the player never flips backward upside down
+                pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, pitch));
+
+                // 3. Clear existing rot matrices and apply the strict Euler sequence
+                camera.rotation.order = "YXZ"; // Standard FPS tracking hierarchy order
+                camera.rotation.set(pitch, yaw, 0);
             }
         });
 
